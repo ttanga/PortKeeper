@@ -2,6 +2,10 @@ listen_addr: "127.0.0.1:8787"
 default_ttl: "24h"
 state_file: "/var/lib/portkeeper/state.json"
 
+# Maximum requests from one client IP during the sliding time window.
+rate_limit_requests: 10
+rate_limit_window: "1m"
+
 access:
   - guid: "REPLACE-WITH-SECRET-GUID-1"
     port: 8080

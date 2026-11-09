@@ -5,13 +5,26 @@ PortKeeper temporarily allows TCP access to configured VPS ports for the source 
 ## Project layout
 
 - `cmd/portkeeper` — application entry point
-- `internal/portkeeper` — configuration, HTTP handler, ipset/firewall integration, and state persistence
+- `internal/portkeeper` — configuration, HTTP handler, ipset/firewall integration, rate limiting, and state persistence
 - `configs/config.example.yaml` — example runtime configuration
 - `deploy/systemd` — systemd unit
 
 ## Requirements
 
 Go 1.23+, `ipset`, `iptables`, and `ip6tables`. The service must run as root (or with equivalent network-administration capabilities).
+
+## Configuration
+
+The example configuration includes a per-IP sliding-window rate limit:
+
+```yaml
+rate_limit_requests: 10
+rate_limit_window: "1m"
+```
+
+This allows at most 10 HTTP requests from each client IP in any rolling one-minute window. The 11th request receives HTTP `429 Too Many Requests` and a `Retry-After` header. Requests are counted per source IP, including requests with an unknown GUID and unsupported HTTP methods. The limiter is in-memory and resets when the service restarts.
+
+Both values are configurable. `rate_limit_requests` must be at least 1; `rate_limit_window` must be a positive Go duration such as `30s`, `1m`, or `5m`. If omitted, they default to 10 requests and 1 minute.
 
 ## Build and test
 

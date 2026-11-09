@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestRemoteIP(t *testing.T) {
@@ -50,5 +51,32 @@ func TestRequestIPUsesXRealIP(t *testing.T) {
 	}
 	if got.String() != "198.51.100.25" {
 		t.Fatalf("requestIP() = %q", got)
+	}
+}
+
+func TestRateLimiterPerIPAndWindowExpiry(t *testing.T) {
+	limiter := NewRateLimiter(2, time.Minute)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	if allowed, _ := limiter.Allow("192.0.2.1", now); !allowed {
+		t.Fatal("first request should be allowed")
+	}
+	if allowed, _ := limiter.Allow("192.0.2.1", now.Add(time.Second)); !allowed {
+		t.Fatal("second request should be allowed")
+	}
+	if allowed, retry := limiter.Allow("192.0.2.1", now.Add(2*time.Second)); allowed || retry != 58*time.Second {
+		t.Fatalf("third request = allowed %v, retry %v; want false, 58s", allowed, retry)
+	}
+	if allowed, _ := limiter.Allow("192.0.2.2", now.Add(2*time.Second)); !allowed {
+		t.Fatal("a different IP should have its own limit")
+	}
+	if allowed, _ := limiter.Allow("192.0.2.1", now.Add(61*time.Second)); !allowed {
+		t.Fatal("request should be allowed after the oldest request expires")
+	}
+}
+
+func TestRetryAfterSecondsRoundsUp(t *testing.T) {
+	if got := retryAfterSeconds(1500 * time.Millisecond); got != 2 {
+		t.Fatalf("retryAfterSeconds() = %d, want 2", got)
 	}
 }

@@ -9,10 +9,12 @@ import (
 )
 
 type Config struct {
-	ListenAddr string       `yaml:"listen_addr"`
-	DefaultTTL string       `yaml:"default_ttl"`
-	StateFile  string       `yaml:"state_file"`
-	Access     []AccessRule `yaml:"access"`
+	ListenAddr        string       `yaml:"listen_addr"`
+	DefaultTTL        string       `yaml:"default_ttl"`
+	StateFile         string       `yaml:"state_file"`
+	RateLimitRequests int          `yaml:"rate_limit_requests"`
+	RateLimitWindow   string       `yaml:"rate_limit_window"`
+	Access            []AccessRule `yaml:"access"`
 }
 
 type AccessRule struct {
@@ -39,10 +41,23 @@ func LoadConfig(path string) (Config, time.Duration, error) {
 	if cfg.StateFile == "" {
 		cfg.StateFile = "/var/lib/portkeeper/state.json"
 	}
+	if cfg.RateLimitRequests == 0 {
+		cfg.RateLimitRequests = 10
+	}
+	if cfg.RateLimitWindow == "" {
+		cfg.RateLimitWindow = "1m"
+	}
 
 	ttl, err := time.ParseDuration(cfg.DefaultTTL)
 	if err != nil || ttl <= 0 {
 		return Config{}, 0, fmt.Errorf("default_ttl must be a positive Go duration")
+	}
+	rateLimitWindow, err := time.ParseDuration(cfg.RateLimitWindow)
+	if err != nil || rateLimitWindow <= 0 {
+		return Config{}, 0, fmt.Errorf("rate_limit_window must be a positive Go duration")
+	}
+	if cfg.RateLimitRequests < 1 {
+		return Config{}, 0, fmt.Errorf("rate_limit_requests must be at least 1")
 	}
 	if len(cfg.Access) == 0 {
 		return Config{}, 0, fmt.Errorf("access must contain at least one GUID/port mapping")
