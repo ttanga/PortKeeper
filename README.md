@@ -71,3 +71,21 @@ location / {
     proxy_set_header X-Real-IP $remote_addr;
 }
 ```
+
+## GitHub Actions deployment
+
+The `.github/workflows/deploy.yml` workflow tests the project, builds a Linux amd64 binary, and deploys it to the VPS over SSH when changes are pushed to `main`. It can also be started manually with `workflow_dispatch`.
+
+Configure these values in **Settings → Secrets and variables → Actions**:
+
+Repository variables:
+- `VPS_HOST` — VPS hostname or IP address
+- `VPS_USER` — SSH deployment account (for example, `deploy`)
+- `VPS_KNOWN_HOSTS` — verified SSH host-key line for the VPS
+
+Repository secret:
+- `VPS_SSH_PRIVATE_KEY` — private key matching the public key installed in `/home/deploy/.ssh/authorized_keys`
+
+The host key is public information, so it belongs in a variable rather than a secret. It is nevertheless security-sensitive: verify its fingerprint against the VPS console before saving it. Do not disable SSH host-key checking.
+
+The VPS must be bootstrapped once with `deploy/scripts/setup-vps.sh`, and `/app/golang/PortKeeper/config.yaml` must be configured before the first deployment. Subsequent application deployments do not require pulling the repository on the VPS: GitHub Actions builds the binary and uploads it over SSH.
