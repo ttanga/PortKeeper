@@ -73,9 +73,9 @@ jobs:
           test -n "$VPS_SSH_PRIVATE_KEY"
           test -n "$VPS_KNOWN_HOSTS"
           install -d -m 700 ~/.ssh
-          printf '%s\\n' "$VPS_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          printf '%s\\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       - name: Copy binary to VPS
@@ -85,7 +85,7 @@ jobs:
         run: |
           test -n "$VPS_HOST"
           test -n "$VPS_USER"
-          scp -i ~/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes \\
+          scp -i ~/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes \
             ./portkeeper "${VPS_USER}@${VPS_HOST}:/tmp/portkeeper-upload"
 
       - name: Activate deployment
@@ -93,6 +93,6 @@ jobs:
           VPS_HOST: ${{ vars.VPS_HOST }}
           VPS_USER: ${{ vars.VPS_USER }}
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes \\
-            "${VPS_USER}@${VPS_HOST}" \\
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "${VPS_USER}@${VPS_HOST}" \
             'sudo /usr/local/sbin/deploy-portkeeper'
