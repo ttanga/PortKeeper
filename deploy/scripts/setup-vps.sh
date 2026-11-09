@@ -45,13 +45,11 @@ fi
 
 install -d -o root -g portkeeper -m 0750 /app/golang/PortKeeper
 install -d -o root -g portkeeper -m 0750 /var/lib/portkeeper
+install -o root -g portkeeper -m 0640 \
+  "$PROJECT_ROOT/configs/config.example.yaml" \
+  /app/golang/PortKeeper/config.example.yaml
 
-if [[ ! -f /app/golang/PortKeeper/config.yaml ]]; then
-  install -o root -g portkeeper -m 0640 \
-    "$PROJECT_ROOT/configs/config.example.yaml" \
-    /app/golang/PortKeeper/config.yaml
-  echo "Created config.yaml from the example. Edit its GUIDs and ports before deploying."
-else
+if [[ -f /app/golang/PortKeeper/config.yaml ]]; then
   chown root:portkeeper /app/golang/PortKeeper/config.yaml
   chmod 0640 /app/golang/PortKeeper/config.yaml
 fi
@@ -75,8 +73,8 @@ systemctl enable portkeeper
 
 echo
 echo "Initial VPS setup completed."
-echo "1. Edit /app/golang/PortKeeper/config.yaml and replace example GUIDs."
-echo "2. Check the configured ports carefully; PortKeeper manages INPUT firewall rules for them."
-echo "3. Add GitHub Actions secrets: VPS_HOST, VPS_USER, VPS_SSH_PRIVATE_KEY, VPS_KNOWN_HOSTS."
-echo "4. Push to main (or run the workflow manually) to deploy."
-echo "The service has been enabled but not started yet."
+echo "Create /app/golang/PortKeeper/config.yaml using config.example.yaml as a template."
+echo "IMPORTANT: replace the example GUIDs and choose ports carefully before starting PortKeeper."
+echo "PortKeeper installs INPUT firewall rules for every configured port."
+echo "Then add GitHub Actions secrets: VPS_HOST, VPS_USER, VPS_SSH_PRIVATE_KEY, VPS_KNOWN_HOSTS."
+echo "The service is enabled but has not been started."
