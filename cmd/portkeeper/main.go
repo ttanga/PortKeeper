@@ -5,9 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-
-	"portkeeper/internal/portkeeper"
 	"time"
+
+	"github.com/ttanga/PortKeeper/internal/portkeeper"
 )
 
 func main() {

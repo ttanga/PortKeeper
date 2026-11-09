@@ -1,4 +1,4 @@
-module portkeeper
+module github.com/ttanga/PortKeeper
 
 go 1.23
 

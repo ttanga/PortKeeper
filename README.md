@@ -13,30 +13,31 @@ PortKeeper temporarily allows TCP access to configured VPS ports for the source 
 
 Go 1.23+, `ipset`, `iptables`, and `ip6tables`. The service must run as root (or with equivalent network-administration capabilities).
 
-## Build
+## Build and test
 
 From the repository root:
 
 ```sh
 go test ./...
-go build -o /app/golang/PortKeeper/portkeeper ./cmd/portkeeper
+go build -o ./portkeeper ./cmd/portkeeper
 ```
 
-## Configure and run on the VPS
+## Deploy on the VPS
 
-The repository layout is independent of the deployment directory. The systemd unit expects the deployed files under `/app/golang/PortKeeper`.
-
-Create the deployment directory and copy the example configuration:
+The repository layout is independent of the deployment directory. The systemd unit expects the binary and runtime configuration under `/app/golang/PortKeeper`.
 
 ```sh
 sudo mkdir -p /app/golang/PortKeeper
+sudo cp ./portkeeper /app/golang/PortKeeper/portkeeper
 sudo cp configs/config.example.yaml /app/golang/PortKeeper/config.yaml
 ```
 
-Edit `/app/golang/PortKeeper/config.yaml`, replacing the example GUID values. Then run:
+Edit `/app/golang/PortKeeper/config.yaml`, replacing the example GUID values. Install and start the systemd unit:
 
 ```sh
-sudo /app/golang/PortKeeper/portkeeper -config /app/golang/PortKeeper/config.yaml
+sudo cp deploy/systemd/portkeeper.service /etc/systemd/system/portkeeper.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now portkeeper
 ```
 
 The default listener is `127.0.0.1:8787`, the default TTL is 24 hours, and the default state file is `/var/lib/portkeeper/state.json`.
