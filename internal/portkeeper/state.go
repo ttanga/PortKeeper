@@ -1,4 +1,4 @@
-package main
+package portkeeper
 
 import (
 	"encoding/json"
@@ -52,7 +52,7 @@ func (s StateStore) Save(entries []AccessState) error {
 	return nil
 }
 
-func restoreState(fw Firewall, entries []AccessState) ([]AccessState, error) {
+func RestoreState(fw Firewall, entries []AccessState) ([]AccessState, error) {
 	now := time.Now()
 	restored := make([]AccessState, 0, len(entries))
 	for _, entry := range entries {

@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"portkeeper/internal/portkeeper"
 	"time"
 )
 
@@ -12,7 +14,7 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "path to YAML configuration")
 	flag.Parse()
 
-	cfg, ttl, err := LoadConfig(*configPath)
+	cfg, ttl, err := portkeeper.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("configuration error: %v", err)
 	}
@@ -21,12 +23,12 @@ func main() {
 		ports = append(ports, rule.Port)
 	}
 
-	fw := Firewall{}
+	fw := portkeeper.Firewall{}
 	if err := fw.Ensure(ports); err != nil {
 		log.Fatalf("firewall initialization failed: %v", err)
 	}
 
-	store := StateStore{Path: cfg.StateFile}
+	store := portkeeper.StateStore{Path: cfg.StateFile}
 	entries, err := store.Load()
 	if err != nil {
 		log.Fatalf("state loading failed: %v", err)
@@ -35,13 +37,13 @@ func main() {
 	for _, port := range ports {
 		configuredPorts[port] = struct{}{}
 	}
-	filtered := make([]AccessState, 0, len(entries))
+	filtered := make([]portkeeper.AccessState, 0, len(entries))
 	for _, entry := range entries {
 		if _, ok := configuredPorts[entry.Port]; ok {
 			filtered = append(filtered, entry)
 		}
 	}
-	entries, err = restoreState(fw, filtered)
+	entries, err = portkeeper.RestoreState(fw, filtered)
 	if err != nil {
 		log.Fatalf("state restoration failed: %v", err)
 	}
@@ -49,7 +51,7 @@ func main() {
 		log.Fatalf("state initialization failed: %v", err)
 	}
 
-	server := NewServer(cfg, ttl, fw, store, entries)
+	server := portkeeper.NewServer(cfg, ttl, fw, store, entries)
 	httpServer := &http.Server{Addr: cfg.ListenAddr, Handler: server, ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("PortKeeper listening on %s", cfg.ListenAddr)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
