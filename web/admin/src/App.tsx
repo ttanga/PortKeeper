@@ -118,6 +118,7 @@ export default function App() {
   );
 
   if (!config) return <main className="center"><div className="panel">{error || "Загрузка конфигурации…"}</div></main>;
+  const tlsPendingRestart = config.admin.https !== (window.location.protocol === "https:");
 
   return (
     <div className="app-shell">

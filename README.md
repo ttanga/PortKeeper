@@ -360,7 +360,7 @@ Restart PortKeeper. If HTTPS is enabled and the certificate or key is missing/in
 
 The firewall action does **not** expose configured target ports to every Internet address. It reapplies the PortKeeper allowlist: only source IPs that have successfully called the corresponding GUID endpoint are accepted for the configured TCP port; other source IPs are dropped by the PortKeeper chain.
 
-The admin UI intentionally keeps the main API listener, state-file path and admin transport settings read-only. Change those host-level settings in `config.yaml` and restart the service. Saving editable settings in the UI updates the live GUID map, TTL and rate limiter without restarting the main service.
+The admin UI keeps the main API listener, state-file path and admin listener address read-only. The HTTPS toggle and certificate/key paths are editable in the UI; saving a TLS change validates the certificate and marks that a service restart is required. The main API listener, state-file path and admin listener address remain configurable in `config.yaml`. Saving access rules, TTL and rate limits updates the live service without restarting it.
 
 The React source is in `web/admin`. The CI workflow installs Node.js dependencies, builds the frontend into the embedded assets directory, and then builds the single Go binary. Build locally with:
 

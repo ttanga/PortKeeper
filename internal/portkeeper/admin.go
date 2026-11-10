@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -261,11 +262,21 @@ func (c *adminController) configHandler(w http.ResponseWriter, r *http.Request) 
 		// Listener, state storage and admin transport are host-level settings.
 		next.ListenAddr = current.ListenAddr
 		next.StateFile = current.StateFile
-		next.Admin = current.Admin
+		next.Admin.Enabled = current.Admin.Enabled
+		next.Admin.ListenAddr = current.Admin.ListenAddr
 		next, ttl, err := ValidateConfig(next)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+		restartRequired := next.Admin.HTTPS != current.Admin.HTTPS ||
+			next.Admin.TLSCertFile != current.Admin.TLSCertFile ||
+			next.Admin.TLSKeyFile != current.Admin.TLSKeyFile
+		if next.Admin.Enabled && next.Admin.HTTPS {
+			if _, err := tls.LoadX509KeyPair(next.Admin.TLSCertFile, next.Admin.TLSKeyFile); err != nil {
+				http.Error(w, "invalid or unreadable TLS certificate/key: "+err.Error(), http.StatusBadRequest)
+				return
+			}
 		}
 		oldData, err := os.ReadFile(c.configPath)
 		if err != nil {
@@ -289,7 +300,7 @@ func (c *adminController) configHandler(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "configuration apply failed; previous config restored: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeAdminJSON(w, http.StatusOK, map[string]any{"saved": true, "config": next})
+		writeAdminJSON(w, http.StatusOK, map[string]any{"saved": true, "restart_required": restartRequired, "config": next})
 	default:
 		w.Header().Set("Allow", "GET, PUT")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
