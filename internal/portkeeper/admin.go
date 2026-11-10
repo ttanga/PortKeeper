@@ -45,6 +45,43 @@ type adminController struct {
 	mu         sync.Mutex
 }
 
+type adminSessions struct {
+	mu      sync.Mutex
+	entries map[string]time.Time
+}
+
+func (s *adminSessions) add(token string, expires time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for key, expiry := range s.entries {
+		if !expiry.After(now) {
+			delete(s.entries, key)
+		}
+	}
+	s.entries[token] = expires
+}
+
+func (s *adminSessions) valid(token string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	expires, ok := s.entries[token]
+	if !ok {
+		return false
+	}
+	if !expires.After(time.Now()) {
+		delete(s.entries, token)
+		return false
+	}
+	return true
+}
+
+func (s *adminSessions) revoke(token string) {
+	s.mu.Lock()
+	delete(s.entries, token)
+	s.mu.Unlock()
+}
+
 func CreateAdminCredentials(username, password string) error {
 	username = strings.TrimSpace(username)
 	if username == "" {
@@ -144,6 +181,7 @@ func NewAdminHandler(configPath string, service *Server) (http.Handler, error) {
 	}
 
 	controller := &adminController{configPath: configPath, service: service}
+	sessions := &adminSessions{entries: make(map[string]time.Time)}
 	loginLimiter := NewRateLimiter(5, time.Minute)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +212,7 @@ func NewAdminHandler(configPath string, service *Server) (http.Handler, error) {
 			return
 		}
 		token, expires := createSession(creds.Username, secret)
+		sessions.add(token, expires)
 		http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: token, Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode, Expires: expires, MaxAge: int(sessionLifetime.Seconds())})
 		writeAdminJSON(w, http.StatusOK, map[string]bool{"authenticated": true})
 	})
@@ -182,7 +221,7 @@ func NewAdminHandler(configPath string, service *Server) (http.Handler, error) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if !authenticated(r, creds.Username, secret) {
+		if !authenticated(r, creds.Username, secret, sessions) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -193,11 +232,14 @@ func NewAdminHandler(configPath string, service *Server) (http.Handler, error) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if cookie, err := r.Cookie(adminCookieName); err == nil {
+			sessions.revoke(cookie.Value)
+		}
 		http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: "", Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode, MaxAge: -1, Expires: time.Unix(1, 0)})
 		writeAdminJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
 	})
-	mux.Handle("/api/config", controller.authorize(creds.Username, secret, http.HandlerFunc(controller.configHandler)))
-	mux.Handle("/api/firewall/apply", controller.authorize(creds.Username, secret, http.HandlerFunc(controller.applyFirewallHandler)))
+	mux.Handle("/api/config", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.configHandler)))
+	mux.Handle("/api/firewall/apply", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.applyFirewallHandler)))
 
 	staticFS, err := webadmin.SubFS()
 	if err != nil {
@@ -221,9 +263,9 @@ func NewAdminHandler(configPath string, service *Server) (http.Handler, error) {
 	return securityHeaders(mux), nil
 }
 
-func (c *adminController) authorize(username string, secret []byte, next http.Handler) http.Handler {
+func (c *adminController) authorize(username string, secret []byte, sessions *adminSessions, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !authenticated(r, username, secret) {
+		if !authenticated(r, username, secret, sessions) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -374,7 +416,7 @@ func createSession(username string, secret []byte) (string, time.Time) {
 	return token, expires
 }
 
-func authenticated(r *http.Request, username string, secret []byte) bool {
+func authenticated(r *http.Request, username string, secret []byte, sessions *adminSessions) bool {
 	cookie, err := r.Cookie(adminCookieName)
 	if err != nil {
 		return false
@@ -401,7 +443,7 @@ func authenticated(r *http.Request, username string, secret []byte) bool {
 		return false
 	}
 	expires, err := strconv.ParseInt(fields[1], 10, 64)
-	return err == nil && time.Now().Unix() < expires
+	return err == nil && time.Now().Unix() < expires && sessions.valid(cookie.Value)
 }
 
 func securityHeaders(next http.Handler) http.Handler {
