@@ -92,6 +92,16 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  async function grantCurrentIP(port: number) {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await api("/api/access/current-ip", { method: "POST", body: JSON.stringify({ port }) });
+      const result = await response.json();
+      setMessage(`Доступ к TCP-порту ${result.port} открыт для IP ${result.ip} до ${new Date(result.expires_at).toLocaleString()}.`);
+    } catch (e) { setError(String(e)); }
+    finally { setBusy(false); }
+  }
+
   async function logout() {
     try { await api("/api/logout", { method: "POST" }); } finally { setAuthenticated(false); setConfig(null); }
   }
@@ -141,13 +151,14 @@ export default function App() {
           </div>
         </section>
         <section className="panel">
-          <div className="section-title"><div><h2>Access Rules</h2><p className="muted">GUID сопоставляется с TCP-портом, который открывается для IP вызывающего клиента на время TTL.</p></div><button className="secondary compact" onClick={() => setConfig({ ...config, access: [...config.access, { guid: newGuid(), port: 8080 }] })}>＋ Добавить правило</button></div>
+          <div className="section-title"><div><h2>Access Rules</h2><p className="muted">GUID сопоставляется с TCP-портом. Доступ можно выдать по GUID-запросу или кнопкой ниже прямо из админки на время TTL.</p></div><button className="secondary compact" onClick={() => setConfig({ ...config, access: [...config.access, { guid: newGuid(), port: 8080 }] })}>＋ Добавить правило</button></div>
           <div className="rules">
             {config.access.map((rule, index) => <div className="rule" key={index}>
               <div className="rule-number">{String(index + 1).padStart(2, "0")}</div>
               <label className="guid-field">GUID<input value={rule.guid} onChange={(e) => updateRule(index, { guid: e.target.value })} spellCheck={false} /></label>
               <label className="port-field">TCP Port<input type="number" min="1" max="65535" value={rule.port} onChange={(e) => updateRule(index, { port: Number(e.target.value) })} /></label>
               <button className="icon-button danger-text" title="Удалить правило" onClick={() => setConfig({ ...config, access: config.access.filter((_, i) => i !== index) })}>×</button>
+              <button className="secondary rule-grant" onClick={() => grantCurrentIP(rule.port)} disabled={busy}>Открыть для моего IP</button>
             </div>)}
           </div>
           <div className="rule-note">Порт не становится общедоступным: firewall пропускает только IP-адреса, которым выдан временный доступ через соответствующий GUID.</div>

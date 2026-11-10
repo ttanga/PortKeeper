@@ -240,6 +240,7 @@ func NewAdminHandler(configPath string, service *Server) (http.Handler, error) {
 	})
 	mux.Handle("/api/config", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.configHandler)))
 	mux.Handle("/api/firewall/apply", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.applyFirewallHandler)))
+	mux.Handle("/api/access/current-ip", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.grantCurrentIPHandler)))
 
 	staticFS, err := webadmin.SubFS()
 	if err != nil {
@@ -382,6 +383,39 @@ func (c *adminController) applyFirewallHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeAdminJSON(w, http.StatusOK, map[string]any{"applied": true, "ports": ports, "mode": "temporary-ip-allowlist"})
+}
+
+func (c *adminController) grantCurrentIPHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost || !validBrowserMutation(r) {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	var input struct { Port uint16 `json:"port"` }
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Port == 0 {
+		http.Error(w, "invalid port", http.StatusBadRequest)
+		return
+	}
+	// Trust only the TCP peer address, never client-supplied forwarding headers.
+	ip, err := remoteIP(r.RemoteAddr)
+	if err != nil {
+		http.Error(w, "unable to determine client IP", http.StatusBadRequest)
+		return
+	}
+	expiresAt, err := c.service.GrantAccess(input.Port, ip)
+	if err != nil {
+		if strings.Contains(err.Error(), "not configured") {
+			http.Error(w, "port is not configured", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "failed to grant access: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeAdminJSON(w, http.StatusOK, map[string]any{
+		"granted": true, "ip": ip.String(), "port": input.Port,
+		"expires_at": expiresAt.UTC().Format(time.RFC3339),
+		"expires_in": int64(time.Until(expiresAt).Seconds()),
+	})
 }
 
 func validBrowserMutation(r *http.Request) bool {

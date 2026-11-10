@@ -150,6 +150,39 @@ func (s *Server) ApplyConfig(cfg Config, ttl time.Duration) error {
 	return nil
 }
 
+// GrantAccess adds the requesting IP to the allowlist for a configured port.
+func (s *Server) GrantAccess(port uint16, ip net.IP) (time.Time, error) {
+	if ip == nil {
+		return time.Time{}, errors.New("invalid client IP")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	configured := false
+	for _, configuredPort := range s.guidPorts {
+		if configuredPort == port { configured = true; break }
+	}
+	if !configured { return time.Time{}, errors.New("port is not configured") }
+
+	key := stateKey(port, ip.String())
+	previous, hadPrevious := s.entries[key]
+	expiresAt := time.Now().Add(s.ttl)
+	if err := s.firewall.Refresh(port, ip, s.ttl); err != nil {
+		return time.Time{}, fmt.Errorf("update firewall allowlist: %w", err)
+	}
+	s.entries[key] = AccessState{Port: port, IP: ip.String(), ExpiresAt: expiresAt}
+	if err := s.saveLocked(); err != nil {
+		if hadPrevious {
+			s.entries[key] = previous
+			if previous.ExpiresAt.After(time.Now()) { _ = s.firewall.Refresh(port, ip, time.Until(previous.ExpiresAt)) }
+		} else {
+			delete(s.entries, key)
+			_ = s.firewall.run("ipset", "del", setName(port, ip), ip.String())
+		}
+		return time.Time{}, fmt.Errorf("save access state: %w", err)
+	}
+	return expiresAt, nil
+}
+
 func stateKey(port uint16, ip string) string {
 	return fmt.Sprintf("%d|%s", port, ip)
 }
