@@ -330,6 +330,39 @@ sudo chown root:portkeeper /app/golang/PortKeeper/config.yaml
 sudo chmod 0660 /app/golang/PortKeeper/config.yaml
 ```
 
+The service must also be allowed to write to this file by its systemd sandbox. The unit uses `ProtectSystem=strict`, which makes the filesystem read-only inside the service except for paths listed in `ReadWritePaths`. The installed unit should include both `/var/lib/portkeeper` and `/app/golang/PortKeeper/config.yaml`.
+
+Check the effective settings:
+
+```sh
+sudo systemctl show portkeeper -p User -p Group -p ProtectSystem -p ReadWritePaths
+```
+
+If `ReadWritePaths` lists only `/var/lib/portkeeper`, add the config file using a systemd drop-in:
+
+```sh
+sudo env SYSTEMD_EDITOR=/usr/bin/vi systemctl edit portkeeper
+```
+
+Add:
+
+```ini
+[Service]
+ReadWritePaths=/app/golang/PortKeeper/config.yaml
+```
+
+Save and close the editor, then reload systemd and restart PortKeeper:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl restart portkeeper
+sudo systemctl show portkeeper -p ReadWritePaths
+```
+
+The resulting `ReadWritePaths` must include both paths. The drop-in adds the config file to the existing writable paths; do not clear the existing `ReadWritePaths` list. If `vi` is installed at a different location, replace `/usr/bin/vi` with the path returned by `command -v vi`.
+
+Correct ownership and mode on `config.yaml` are still required: `root:portkeeper` and `0660`. The service account must also have execute (directory traversal) permission on every parent directory. A successful `sudo -u portkeeper test -w ...` check alone does not test systemd's filesystem sandbox.
+
 Open TCP 8083 in the VPS provider firewall and, if enabled, UFW:
 
 ```sh
