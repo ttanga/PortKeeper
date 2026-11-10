@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -21,6 +23,7 @@ func main() {
 	flag.Parse()
 
 	if *createAdmin {
+		fmt.Fprint(os.Stderr, "Enter admin password: ")
 		password, err := readPassword()
 		if err != nil {
 			log.Fatalf("read admin password: %v", err)
@@ -113,13 +116,18 @@ func main() {
 }
 
 func readPassword() (string, error) {
-	data, err := os.ReadFile("/dev/stdin")
-	if err != nil {
+	return readPasswordFrom(os.Stdin)
+}
+
+func readPasswordFrom(input io.Reader) (string, error) {
+	line, err := bufio.NewReader(input).ReadString('\n')
+	if err != nil && err != io.EOF {
 		return "", err
 	}
-	password := strings.TrimRight(string(data), "\r\n")
+
+	password := strings.TrimRight(line, "\r\n")
 	if password == "" {
-		return "", fmt.Errorf("password was empty; pipe it through stdin")
+		return "", fmt.Errorf("password cannot be empty")
 	}
 	return password, nil
 }
