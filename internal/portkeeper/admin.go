@@ -87,9 +87,6 @@ func CreateAdminCredentials(username, password string) error {
 	if username == "" {
 		return errors.New("admin username is required")
 	}
-	if len(password) < 12 {
-		return errors.New("admin password must contain at least 12 characters")
-	}
 	salt := make([]byte, 16)
 	secret := make([]byte, 32)
 	if _, err := rand.Read(salt); err != nil {

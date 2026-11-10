@@ -192,6 +192,25 @@ A normal deployment:
 
 The workflow deliberately does not copy `config.yaml` or the systemd unit on every application deployment.
 
+### Update the application and set/reset the admin password
+
+Push changes to `main` (or run the workflow manually) to deploy the new binary. After the deployment succeeds, create or reset the local administrator account on the VPS:
+
+```sh
+sudo /app/golang/PortKeeper/portkeeper -admin-create -admin-user admin
+```
+
+Enter the password when prompted and press Enter. **The password is hidden while typing**; the terminal restores its normal input mode afterward. The password is not placed in shell history or process arguments. Any non-empty password is accepted; there are no complexity or minimum-length requirements.
+
+Restart the service so it reloads the new credentials:
+
+```sh
+sudo systemctl restart portkeeper
+sudo systemctl status portkeeper --no-pager
+```
+
+Run the account-creation command again whenever you need to replace the password. Replacing credentials invalidates existing admin sessions.
+
 ### Applying a changed systemd unit
 
 If `deploy/systemd/portkeeper.service` changes, apply it on the VPS explicitly:
@@ -292,16 +311,15 @@ The example config enables the admin listener. Existing runtime configs are not 
 
 ### Create or reset the administrator
 
-Run on the VPS as root. The password is read from standard input and is not passed as a command-line argument:
+Run on the VPS as root:
 
 ```sh
-read -rsp "PortKeeper admin password: " ADMIN_PASSWORD
-echo
-printf '%s' "$ADMIN_PASSWORD" | sudo /app/golang/PortKeeper/portkeeper -admin-create -admin-user admin
-unset ADMIN_PASSWORD
+sudo /app/golang/PortKeeper/portkeeper -admin-create -admin-user admin
 ```
 
-Use a unique password of at least 12 characters. The command stores a PBKDF2-HMAC-SHA256 password hash and a random session-signing secret in `/var/lib/portkeeper/admin.json`, owned by `root:portkeeper` with mode `0640`. Running it again replaces the credentials. Restart PortKeeper afterward; the new credentials are loaded at startup and all existing sessions are invalidated.
+Enter the password at the prompt and press Enter. Terminal echo is disabled while you type, so neither characters nor asterisks are displayed. The original terminal settings are restored after input. Any non-empty password is accepted; PortKeeper does not enforce password length or complexity.
+
+The password is read directly from the terminal and is not passed as a command-line argument. The command stores a PBKDF2-HMAC-SHA256 password hash and a random session-signing secret in `/var/lib/portkeeper/admin.json`, owned by `root:portkeeper` with mode `0640`. Running it again replaces the credentials. Restart PortKeeper afterward; the new credentials are loaded at startup and all existing sessions are invalidated.
 
 ### Enable and expose the admin UI
 
