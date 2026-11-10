@@ -1,4 +1,7 @@
 listen_addr: "0.0.0.0:8787"
+# Public API origin used to generate clickable/copyable GUID URLs in the admin UI.
+# Include scheme and external port; do not add a path or trailing slash.
+public_base_url: "https://portkeeper.example.com:8787"
 default_ttl: "24h"
 state_file: "/var/lib/portkeeper/state.json"
 

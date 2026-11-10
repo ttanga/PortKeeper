@@ -3,3 +3,5 @@
 
 .rule-grant{grid-column:2/-1;justify-self:start;padding:8px 12px;font-size:12px}
 @media(max-width:700px){.rule-grant{grid-column:2/-1;width:100%}}
+
+.rule-actions{grid-column:2/-1;display:flex;gap:8px;flex-wrap:wrap}.rule-actions button{padding:8px 12px;font-size:12px}@media(max-width:700px){.rule-actions{grid-column:2/-1;width:100%}.rule-actions button{flex:1}}

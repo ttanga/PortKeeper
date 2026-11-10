@@ -86,6 +86,7 @@ Example:
 
 ```yaml
 listen_addr: "0.0.0.0:8787"
+public_base_url: "https://portkeeper.example.com:8787"
 default_ttl: "24h"
 state_file: "/var/lib/portkeeper/state.json"
 
@@ -102,6 +103,7 @@ access:
 Configure the following:
 
 - `listen_addr` — HTTP address and port for the API. Use `0.0.0.0:8787` to listen on all IPv4 interfaces. If the API should only be reached through a local reverse proxy, use `127.0.0.1:8787` instead.
+- `public_base_url` — externally reachable API base URL used by the admin UI to generate `GET /<GUID>` links. Include the public scheme, hostname and external port if non-standard, e.g. `https://portkeeper.example.com:8787`. Do not include a path, query, fragment or trailing slash. If omitted, the copy-link buttons remain unavailable.
 - `default_ttl` — how long an IP remains allowed after a successful request.
 - `state_file` — persistent state file. Keep it under `/var/lib/portkeeper`.
 - `rate_limit_requests` and `rate_limit_window` — per-source-IP sliding-window rate limit.
@@ -355,6 +357,7 @@ Restart PortKeeper. If HTTPS is enabled and the certificate or key is missing/in
 - Log in using the local admin account; the browser receives an HttpOnly, SameSite=Strict session cookie.
 - View and edit TTL, rate-limit settings and GUID-to-port access rules.
 - Generate GUIDs and add/remove access rules.
+- Copy a complete public `GET /<GUID>` URL for each access rule. Configure `public_base_url` to the externally reachable API address; it is separate from the admin UI address/port.
 - Save config changes with a backup of the previous config.
 - Apply/rebuild the PortKeeper iptables/ip6tables and ipset rules with **Apply firewall rules**.
 

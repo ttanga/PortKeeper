@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 type Rule = { guid: string; port: number };
 type Config = {
   listen_addr: string;
+  public_base_url: string;
   default_ttl: string;
   state_file: string;
   rate_limit_requests: number;
@@ -92,6 +93,21 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  async function copyGuidURL(guid: string) {
+    if (!config?.public_base_url) {
+      setError("Сначала укажи публичный URL API в основных параметрах.");
+      return;
+    }
+    const url = `${config.public_base_url.replace(/\/+$/, "")}/${encodeURIComponent(guid)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setError("");
+      setMessage(`URL для GUID скопирован: ${url}`);
+    } catch {
+      setError("Не удалось скопировать URL. Проверь, что админка открыта по HTTPS и браузеру разрешён доступ к буферу обмена.");
+    }
+  }
+
   async function grantCurrentIP(port: number) {
     setBusy(true); setError(""); setMessage("");
     try {
@@ -128,7 +144,7 @@ export default function App() {
   );
 
   if (!config) return <main className="center"><div className="panel">{error || "Загрузка конфигурации…"}</div></main>;
-  const tlsPendingRestart = config.admin.https !== (window.location.protocol === "https:");
+  
 
   return (
     <div className="app-shell">
@@ -144,6 +160,7 @@ export default function App() {
           <div className="section-title"><div><h2>Основные параметры</h2><p className="muted">Параметры API и ограничение частоты запросов</p></div></div>
           <div className="form-grid">
             <label>API Listen Address<input value={config.listen_addr} disabled /></label>
+            <label className="wide">Public API URL<input value={config.public_base_url || ""} placeholder="https://vpn.example.com:8787" onChange={(e) => setConfig({ ...config, public_base_url: e.target.value })} /><small className="muted">Публичный адрес API с протоколом и портом, без завершающего слеша. Используется для создания ссылок вида URL/GUID.</small></label>
             <label>Default TTL<input value={config.default_ttl} onChange={(e) => setConfig({ ...config, default_ttl: e.target.value })} /></label>
             <label>Rate limit requests<input type="number" min="1" value={config.rate_limit_requests} onChange={(e) => setConfig({ ...config, rate_limit_requests: Number(e.target.value) })} /></label>
             <label>Rate limit window<input value={config.rate_limit_window} onChange={(e) => setConfig({ ...config, rate_limit_window: e.target.value })} /></label>
@@ -158,7 +175,7 @@ export default function App() {
               <label className="guid-field">GUID<input value={rule.guid} onChange={(e) => updateRule(index, { guid: e.target.value })} spellCheck={false} /></label>
               <label className="port-field">TCP Port<input type="number" min="1" max="65535" value={rule.port} onChange={(e) => updateRule(index, { port: Number(e.target.value) })} /></label>
               <button className="icon-button danger-text" title="Удалить правило" onClick={() => setConfig({ ...config, access: config.access.filter((_, i) => i !== index) })}>×</button>
-              <button className="secondary rule-grant" onClick={() => grantCurrentIP(rule.port)} disabled={busy}>Открыть для моего IP</button>
+              <div className="rule-actions"><button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url}>Скопировать URL</button><button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy}>Открыть для моего IP</button></div>
             </div>)}
           </div>
           <div className="rule-note">Порт не становится общедоступным: firewall пропускает только IP-адреса, которым выдан временный доступ через соответствующий GUID.</div>

@@ -3,7 +3,9 @@ package portkeeper
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -11,6 +13,7 @@ import (
 
 type Config struct {
 	ListenAddr        string       `yaml:"listen_addr" json:"listen_addr"`
+	PublicBaseURL     string       `yaml:"public_base_url" json:"public_base_url"`
 	DefaultTTL        string       `yaml:"default_ttl" json:"default_ttl"`
 	StateFile         string       `yaml:"state_file" json:"state_file"`
 	RateLimitRequests int          `yaml:"rate_limit_requests" json:"rate_limit_requests"`
@@ -51,6 +54,13 @@ func ParseConfig(data []byte) (Config, time.Duration, error) {
 func ValidateConfig(cfg Config) (Config, time.Duration, error) {
 	if cfg.ListenAddr == "" {
 		cfg.ListenAddr = ":8787"
+	}
+	cfg.PublicBaseURL = strings.TrimRight(strings.TrimSpace(cfg.PublicBaseURL), "/")
+	if cfg.PublicBaseURL != "" {
+		parsed, parseErr := url.Parse(cfg.PublicBaseURL)
+		if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
+			return Config{}, 0, fmt.Errorf("public_base_url must be an absolute http(s) URL with host and optional port, without path, query or fragment")
+		}
 	}
 	if cfg.DefaultTTL == "" {
 		cfg.DefaultTTL = "24h"
