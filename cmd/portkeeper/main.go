@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/ttanga/PortKeeper/internal/portkeeper"
 )
@@ -116,7 +118,27 @@ func main() {
 }
 
 func readPassword() (string, error) {
-	return readPasswordFrom(os.Stdin)
+	fd := uintptr(os.Stdin.Fd())
+	var original syscall.Termios
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TCGETS), uintptr(unsafe.Pointer(&original)))
+	if errno != 0 {
+		// stdin may be a pipe or redirected file; use ordinary line input there.
+		return readPasswordFrom(os.Stdin)
+	}
+
+	hidden := original
+	hidden.Lflag &^= syscall.ECHO
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TCSETS), uintptr(unsafe.Pointer(&hidden))); errno != 0 {
+		return "", fmt.Errorf("disable terminal echo: %w", errno)
+	}
+	defer func() {
+		_, _, _ = syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TCSETS), uintptr(unsafe.Pointer(&original)))
+	}()
+
+	password, err := readPasswordFrom(os.Stdin)
+	// Move to the next line while echo is still disabled.
+	_, _ = fmt.Fprintln(os.Stderr)
+	return password, err
 }
 
 func readPasswordFrom(input io.Reader) (string, error) {
