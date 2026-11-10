@@ -55,20 +55,99 @@ func NewServer(cfg Config, ttl time.Duration, fw Firewall, store StateStore, ent
 	}
 }
 
-func (s *Server) UpdateConfig(cfg Config, ttl time.Duration) {
+func (s *Server) ApplyConfig(cfg Config, ttl time.Duration) error {
 	rateWindow, err := time.ParseDuration(cfg.RateLimitWindow)
 	if err != nil || rateWindow <= 0 {
 		rateWindow = time.Minute
 	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	guidPorts := make(map[string]uint16, len(cfg.Access))
-	for _, rule := range cfg.Access {
-		guidPorts[rule.GUID] = rule.Port
+
+	oldPortsSet := make(map[uint16]struct{}, len(s.guidPorts))
+	for _, port := range s.guidPorts {
+		oldPortsSet[port] = struct{}{}
 	}
-	s.guidPorts = guidPorts
+	newPortsSet := make(map[uint16]struct{}, len(cfg.Access))
+	newGUIDPorts := make(map[string]uint16, len(cfg.Access))
+	for _, rule := range cfg.Access {
+		newGUIDPorts[rule.GUID] = rule.Port
+		newPortsSet[rule.Port] = struct{}{}
+	}
+	unionPorts := make(map[uint16]struct{}, len(oldPortsSet)+len(newPortsSet))
+	oldPorts := make([]uint16, 0, len(oldPortsSet))
+	newPorts := make([]uint16, 0, len(newPortsSet))
+	for port := range oldPortsSet {
+		oldPorts = append(oldPorts, port)
+		unionPorts[port] = struct{}{}
+	}
+	for port := range newPortsSet {
+		newPorts = append(newPorts, port)
+		unionPorts[port] = struct{}{}
+	}
+	union := make([]uint16, 0, len(unionPorts))
+	for port := range unionPorts {
+		union = append(union, port)
+	}
+
+	oldEntries := make([]AccessState, 0, len(s.entries))
+	for _, entry := range s.entries {
+		if entry.ExpiresAt.After(time.Now()) {
+			oldEntries = append(oldEntries, entry)
+		}
+	}
+	restoreOldFirewall := func() {
+		_ = s.firewall.Ensure(oldPorts)
+		for _, port := range union {
+			_ = s.firewall.FlushPort(port)
+		}
+		for _, entry := range oldEntries {
+			ip := net.ParseIP(entry.IP)
+			if ip != nil && entry.ExpiresAt.After(time.Now()) {
+				_ = s.firewall.Refresh(entry.Port, ip, time.Until(entry.ExpiresAt))
+			}
+		}
+		_ = s.store.Save(oldEntries)
+	}
+
+	if err := s.firewall.Ensure(newPorts); err != nil {
+		restoreOldFirewall()
+		return fmt.Errorf("rebuild firewall chains: %w", err)
+	}
+	for _, port := range union {
+		if err := s.firewall.FlushPort(port); err != nil {
+			restoreOldFirewall()
+			return fmt.Errorf("clear old firewall set for port %d: %w", port, err)
+		}
+	}
+
+	nextEntries := make(map[string]AccessState)
+	persisted := make([]AccessState, 0, len(oldEntries))
+	for _, entry := range oldEntries {
+		if _, keep := newPortsSet[entry.Port]; !keep {
+			continue
+		}
+		ip := net.ParseIP(entry.IP)
+		if ip == nil {
+			continue
+		}
+		if err := s.firewall.Refresh(entry.Port, ip, time.Until(entry.ExpiresAt)); err != nil {
+			restoreOldFirewall()
+			return fmt.Errorf("restore active access for port %d: %w", entry.Port, err)
+		}
+		nextEntries[stateKey(entry.Port, entry.IP)] = entry
+		persisted = append(persisted, entry)
+	}
+	if err := s.store.Save(persisted); err != nil {
+		restoreOldFirewall()
+		return fmt.Errorf("save filtered access state: %w", err)
+	}
+
+	s.guidPorts = newGUIDPorts
 	s.ttl = ttl
 	s.limiter = NewRateLimiter(cfg.RateLimitRequests, rateWindow)
+	s.entries = nextEntries
+	return nil
 }
 
 func stateKey(port uint16, ip string) string {

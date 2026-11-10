@@ -2,6 +2,7 @@ package portkeeper
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -94,7 +95,17 @@ func ValidateConfig(cfg Config) (Config, time.Duration, error) {
 		}
 		seenGUID[rule.GUID] = struct{}{}
 	}
-	if cfg.Admin.HTTPS && (cfg.Admin.TLSCertFile == "" || cfg.Admin.TLSKeyFile == "") {
+	if cfg.Admin.Enabled {
+		if _, _, err := net.SplitHostPort(cfg.Admin.ListenAddr); err != nil {
+			return Config{}, 0, fmt.Errorf("admin.listen_addr must be a valid host:port address")
+		}
+		_, apiPort, apiErr := net.SplitHostPort(cfg.ListenAddr)
+		_, adminPort, adminErr := net.SplitHostPort(cfg.Admin.ListenAddr)
+		if apiErr == nil && adminErr == nil && apiPort == adminPort {
+			return Config{}, 0, fmt.Errorf("admin.listen_addr must use a different port from listen_addr")
+		}
+	}
+	if cfg.Admin.Enabled && cfg.Admin.HTTPS && (cfg.Admin.TLSCertFile == "" || cfg.Admin.TLSKeyFile == "") {
 		return Config{}, 0, fmt.Errorf("admin HTTPS requires tls_cert_file and tls_key_file")
 	}
 	return cfg, ttl, nil

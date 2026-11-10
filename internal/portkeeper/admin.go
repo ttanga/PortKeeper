@@ -276,29 +276,19 @@ func (c *adminController) configHandler(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "failed to back up current configuration", http.StatusInternalServerError)
 			return
 		}
-		ports := make([]uint16, 0, len(next.Access))
-		for _, rule := range next.Access {
-			ports = append(ports, rule.Port)
-		}
-		if err := c.firewall.Ensure(ports); err != nil {
-			http.Error(w, "failed to apply firewall rules: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
 		encoded, err := yaml.Marshal(next)
 		if err == nil {
 			err = os.WriteFile(c.configPath, encoded, 0640)
 		}
 		if err != nil {
-			_ = os.WriteFile(c.configPath, oldData, 0640)
-			oldPorts := make([]uint16, 0, len(current.Access))
-			for _, rule := range current.Access {
-				oldPorts = append(oldPorts, rule.Port)
-			}
-			_ = c.firewall.Ensure(oldPorts)
-			http.Error(w, "failed to save configuration; previous firewall rules restored", http.StatusInternalServerError)
+			http.Error(w, "failed to save configuration; check config.yaml ownership and mode 0660", http.StatusInternalServerError)
 			return
 		}
-		c.service.UpdateConfig(next, ttl)
+		if err := c.service.ApplyConfig(next, ttl); err != nil {
+			_ = os.WriteFile(c.configPath, oldData, 0640)
+			http.Error(w, "configuration apply failed; previous config restored: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 		writeAdminJSON(w, http.StatusOK, map[string]any{"saved": true, "config": next})
 	default:
 		w.Header().Set("Allow", "GET, PUT")
@@ -326,7 +316,7 @@ func (c *adminController) applyFirewallHandler(w http.ResponseWriter, r *http.Re
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	cfg, _, err := LoadConfig(c.configPath)
+	cfg, ttl, err := LoadConfig(c.configPath)
 	if err != nil {
 		http.Error(w, "failed to read configuration", http.StatusInternalServerError)
 		return
@@ -335,7 +325,7 @@ func (c *adminController) applyFirewallHandler(w http.ResponseWriter, r *http.Re
 	for _, rule := range cfg.Access {
 		ports = append(ports, rule.Port)
 	}
-	if err := c.firewall.Ensure(ports); err != nil {
+	if err := c.service.ApplyConfig(cfg, ttl); err != nil {
 		http.Error(w, "failed to apply firewall rules: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

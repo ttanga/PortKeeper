@@ -294,8 +294,8 @@ Run on the VPS as root. The password is read from standard input and is not pass
 
 ```sh
 read -rsp "PortKeeper admin password: " ADMIN_PASSWORD
-printf '\\n'
-printf '%s\\n' "$ADMIN_PASSWORD" | sudo /app/golang/PortKeeper/portkeeper -admin-create -admin-user admin
+echo
+printf '%s' "$ADMIN_PASSWORD" | sudo /app/golang/PortKeeper/portkeeper -admin-create -admin-user admin
 unset ADMIN_PASSWORD
 ```
 
