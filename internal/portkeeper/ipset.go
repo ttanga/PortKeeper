@@ -91,3 +91,13 @@ func (f Firewall) Refresh(port uint16, ip net.IP, ttl time.Duration) error {
 	}
 	return f.run("ipset", "add", name, address, "timeout", strconv.Itoa(seconds))
 }
+
+func (f Firewall) FlushPort(port uint16) error {
+	for _, family := range []string{"v4", "v6"} {
+		name := fmt.Sprintf("pk_%d_%s", port, family)
+		if err := f.run("ipset", "flush", name); err != nil {
+			return err
+		}
+	}
+	return nil
+}

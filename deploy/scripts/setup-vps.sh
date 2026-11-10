@@ -51,7 +51,7 @@ install -o root -g portkeeper -m 0640 \
 
 if [[ -f /app/golang/PortKeeper/config.yaml ]]; then
   chown root:portkeeper /app/golang/PortKeeper/config.yaml
-  chmod 0640 /app/golang/PortKeeper/config.yaml
+  chmod 0660 /app/golang/PortKeeper/config.yaml
 fi
 
 install -o root -g root -m 0644 \
@@ -74,7 +74,10 @@ systemctl enable portkeeper
 echo
 echo "Initial VPS setup completed."
 echo "Create /app/golang/PortKeeper/config.yaml using config.example.yaml as a template."
-echo "IMPORTANT: replace the example GUIDs and choose ports carefully before starting PortKeeper."
-echo "PortKeeper installs INPUT firewall rules for every configured port."
+echo "Set config.yaml ownership to root:portkeeper and mode 0660 so the admin API can update it."
+echo "Create the admin account with: printf '%s\\n' 'PASSWORD' | portkeeper -admin-create -admin-user admin"
+echo "Open TCP 8083 in the provider firewall and UFW if the admin UI should be public."
+echo "IMPORTANT: replace example GUIDs and choose ports carefully before starting PortKeeper."
+echo "PortKeeper installs INPUT firewall rules for every configured target port."
 echo "Then add GitHub Actions variables: VPS_HOST, VPS_USER, VPS_KNOWN_HOSTS; add secret: VPS_SSH_PRIVATE_KEY."
 echo "The service is enabled but has not been started."
