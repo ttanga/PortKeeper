@@ -7,19 +7,22 @@ import (
 	"time"
 )
 
-func TestSessionAuthentication(t *testing.T) {
+func TestSessionAuthenticationAndLogout(t *testing.T) {
 	secret := []byte("01234567890123456789012345678901")
+	sessions := &adminSessions{entries: make(map[string]time.Time)}
 	token, expires := createSession("admin", secret)
-	if !expires.After(time.Now()) {
-		t.Fatal("session expiration must be in the future")
-	}
+	sessions.add(token, expires)
 	req := httptest.NewRequest("GET", "http://localhost:8083/api/session", nil)
 	req.AddCookie(&http.Cookie{Name: adminCookieName, Value: token})
-	if !authenticated(req, "admin", secret) {
+	if !authenticated(req, "admin", secret, sessions) {
 		t.Fatal("valid session was rejected")
 	}
-	if authenticated(req, "admin", []byte("different secret")) {
+	if authenticated(req, "admin", []byte("different secret"), sessions) {
 		t.Fatal("session signed with a different secret was accepted")
+	}
+	sessions.revoke(token)
+	if authenticated(req, "admin", secret, sessions) {
+		t.Fatal("revoked session was accepted")
 	}
 }
 

@@ -299,7 +299,7 @@ printf '%s' "$ADMIN_PASSWORD" | sudo /app/golang/PortKeeper/portkeeper -admin-cr
 unset ADMIN_PASSWORD
 ```
 
-Use a unique password of at least 12 characters. The command stores a PBKDF2-HMAC-SHA256 password hash and a random session-signing secret in `/var/lib/portkeeper/admin.json`, owned by `root:portkeeper` with mode `0640`. Running it again replaces the credentials and invalidates existing sessions.
+Use a unique password of at least 12 characters. The command stores a PBKDF2-HMAC-SHA256 password hash and a random session-signing secret in `/var/lib/portkeeper/admin.json`, owned by `root:portkeeper` with mode `0640`. Running it again replaces the credentials. Restart PortKeeper afterward; the new credentials are loaded at startup and all existing sessions are invalidated.
 
 ### Enable and expose the admin UI
 

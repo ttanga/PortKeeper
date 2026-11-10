@@ -71,7 +71,7 @@ func main() {
 
 	server := portkeeper.NewServer(cfg, ttl, fw, store, entries)
 	if cfg.Admin.Enabled {
-		adminHandler, err := portkeeper.NewAdminHandler(*configPath, server, fw)
+		adminHandler, err := portkeeper.NewAdminHandler(*configPath, server)
 		if err != nil {
 			log.Fatalf("admin initialization failed: %v", err)
 		}

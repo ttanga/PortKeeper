@@ -42,7 +42,6 @@ type adminCredentials struct {
 type adminController struct {
 	configPath string
 	service    *Server
-	firewall   Firewall
 	mu         sync.Mutex
 }
 
@@ -119,7 +118,7 @@ func derivePassword(password, salt []byte, iterations int) []byte {
 	return out
 }
 
-func NewAdminHandler(configPath string, service *Server, fw Firewall) (http.Handler, error) {
+func NewAdminHandler(configPath string, service *Server) (http.Handler, error) {
 	data, err := os.ReadFile(adminCredentialsPath)
 	if err != nil {
 		return nil, fmt.Errorf("read admin credentials (%s): %w; create an administrator with -admin-create", adminCredentialsPath, err)
@@ -144,7 +143,7 @@ func NewAdminHandler(configPath string, service *Server, fw Firewall) (http.Hand
 		return nil, errors.New("invalid admin session secret")
 	}
 
-	controller := &adminController{configPath: configPath, service: service, firewall: fw}
+	controller := &adminController{configPath: configPath, service: service}
 	loginLimiter := NewRateLimiter(5, time.Minute)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
@@ -413,6 +412,9 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 		if r.TLS != nil {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("Cache-Control", "no-store")
 		}
 		next.ServeHTTP(w, r)
 	})
