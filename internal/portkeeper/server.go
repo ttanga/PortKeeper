@@ -55,25 +55,43 @@ func NewServer(cfg Config, ttl time.Duration, fw Firewall, store StateStore, ent
 	}
 }
 
+func (s *Server) UpdateConfig(cfg Config, ttl time.Duration) {
+	rateWindow, err := time.ParseDuration(cfg.RateLimitWindow)
+	if err != nil || rateWindow <= 0 {
+		rateWindow = time.Minute
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	guidPorts := make(map[string]uint16, len(cfg.Access))
+	for _, rule := range cfg.Access {
+		guidPorts[rule.GUID] = rule.Port
+	}
+	s.guidPorts = guidPorts
+	s.ttl = ttl
+	s.limiter = NewRateLimiter(cfg.RateLimitRequests, rateWindow)
+}
+
 func stateKey(port uint16, ip string) string {
 	return fmt.Sprintf("%d|%s", port, ip)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	ip, err := requestIP(r)
 	if err != nil {
 		http.Error(w, "invalid remote address", http.StatusBadRequest)
 		return
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if allowed, retryAfter := s.limiter.Allow(ip.String(), time.Now()); !allowed {
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfterSeconds(retryAfter)))
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-		return
-	}
-
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 	guid := strings.Trim(r.URL.Path, "/")
@@ -87,8 +105,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	expiresAt := time.Now().Add(s.ttl)
 	if err := s.firewall.Refresh(port, ip, s.ttl); err != nil {
 		http.Error(w, "failed to update access", http.StatusInternalServerError)

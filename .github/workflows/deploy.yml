@@ -2,14 +2,14 @@ name: PortKeeper CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feature/**"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: portkeeper-production
+  group: portkeeper-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -30,12 +30,23 @@ jobs:
         run: go test ./...
 
   build:
-    name: Build Linux binary
+    name: Build Linux binary with React admin
     needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build React admin
+        working-directory: web/admin
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -56,6 +67,7 @@ jobs:
 
   deploy:
     name: Deploy to VPS
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment: production

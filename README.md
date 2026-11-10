@@ -69,7 +69,7 @@ The script:
 - grants the `deploy` user passwordless sudo permission for that deployment script only;
 - enables the service, but does not start it yet.
 
-The script does not overwrite an existing `config.yaml`.
+The script does not overwrite an existing `config.yaml`. If one already exists, it sets ownership to `root:portkeeper` and mode `0660` so the service can update it from the admin UI.
 
 ## 5. Create and configure the runtime config
 
@@ -78,7 +78,7 @@ Create the runtime configuration from the example:
 ```sh
 sudo cp configs/config.example.yaml /app/golang/PortKeeper/config.yaml
 sudo chown root:portkeeper /app/golang/PortKeeper/config.yaml
-sudo chmod 0640 /app/golang/PortKeeper/config.yaml
+sudo chmod 0660 /app/golang/PortKeeper/config.yaml
 sudo nano /app/golang/PortKeeper/config.yaml
 ```
 
@@ -177,7 +177,7 @@ The public key supplied to `setup-vps.sh` must match the private key stored in `
 
 ## 8. Deploy and update
 
-The workflow `.github/workflows/deploy.yml` runs on pushes to `main` and can also be started manually with **Actions → PortKeeper CI/CD → Run workflow**.
+The workflow `.github/workflows/deploy.yml` runs tests and builds on pushes to `main` and `feature/**`; production deployment runs only for `main`. It can also be started manually with **Actions → PortKeeper CI/CD → Run workflow**.
 
 A normal deployment:
 
@@ -210,7 +210,7 @@ Run these commands from a checkout containing the updated repository files. The 
 Keep secure backups of at least:
 
 - `/app/golang/PortKeeper/config.yaml` — contains the GUIDs and port mappings;
-- `/var/lib/portkeeper/state.json` — contains persisted temporary-access expiration state.
+- `/var/lib/portkeeper/state.json` — contains persisted temporary-access expiration state;\n- `/var/lib/portkeeper/admin.json` — contains the password hash and session-signing secret for the admin UI.
 
 The config contains credentials in the form of access GUIDs. Store backups encrypted and restrict access.
 
@@ -228,7 +228,7 @@ Copy the archive securely to the new VPS or a trusted backup location. After run
 ```sh
 sudo tar -xzf /root/portkeeper-backup.tar.gz -C /
 sudo chown root:portkeeper /app/golang/PortKeeper/config.yaml
-sudo chmod 0640 /app/golang/PortKeeper/config.yaml
+sudo chmod 0660 /app/golang/PortKeeper/config.yaml
 sudo chown -R portkeeper:portkeeper /var/lib/portkeeper
 sudo systemctl start portkeeper
 sudo systemctl status portkeeper --no-pager
@@ -268,4 +268,107 @@ From the repository root:
 ```sh
 go test ./...
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o portkeeper ./cmd/portkeeper
+```
+
+
+## 13. Local React administration UI
+
+PortKeeper can serve a React administration UI from the same Go binary. It manages only the local instance; there is no central controller or remote-server connection.
+
+The admin listener defaults to TCP **8083** and is configured separately from the public GUID API listener:
+
+```yaml
+admin:
+  enabled: true
+  listen_addr: "0.0.0.0:8083"
+  https: false
+  tls_cert_file: ""
+  tls_key_file: ""
+```
+
+The example config enables the admin listener. Existing runtime configs are not overwritten by deployment; add this section manually to an existing `config.yaml` to enable it. The admin account must be created before starting the service with admin enabled.
+
+### Create or reset the administrator
+
+Run on the VPS as root. The password is read from standard input and is not passed as a command-line argument:
+
+```sh
+read -rsp "PortKeeper admin password: " ADMIN_PASSWORD
+printf '\\n'
+printf '%s\\n' "$ADMIN_PASSWORD" | sudo /app/golang/PortKeeper/portkeeper -admin-create -admin-user admin
+unset ADMIN_PASSWORD
+```
+
+Use a unique password of at least 12 characters. The command stores a PBKDF2-HMAC-SHA256 password hash and a random session-signing secret in `/var/lib/portkeeper/admin.json`, owned by `root:portkeeper` with mode `0640`. Running it again replaces the credentials and invalidates existing sessions.
+
+### Enable and expose the admin UI
+
+Make sure the runtime config is writable by the service group (the setup script does this for an existing config):
+
+```sh
+sudo chown root:portkeeper /app/golang/PortKeeper/config.yaml
+sudo chmod 0660 /app/golang/PortKeeper/config.yaml
+```
+
+Open TCP 8083 in the VPS provider firewall and, if enabled, UFW:
+
+```sh
+sudo ufw allow 8083/tcp
+```
+
+Then install the updated systemd unit and restart:
+
+```sh
+sudo install -o root -g root -m 0644 deploy/systemd/portkeeper.service /etc/systemd/system/portkeeper.service
+sudo systemctl daemon-reload
+sudo systemctl restart portkeeper
+sudo systemctl status portkeeper --no-pager
+```
+
+Open `http://YOUR_VPS_HOST:8083/` in a browser. **Plain HTTP is not safe for an admin interface exposed to the Internet:** credentials and session cookies can be intercepted. Use HTTPS as soon as possible.
+
+### Enable HTTPS
+
+Install a certificate and private key readable by the `portkeeper` group. For Let's Encrypt, copy the current files into a dedicated directory (renewal automation must refresh these copies):
+
+```sh
+sudo install -d -o root -g portkeeper -m 0750 /etc/portkeeper/tls
+sudo install -o root -g portkeeper -m 0640 /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem /etc/portkeeper/tls/fullchain.pem
+sudo install -o root -g portkeeper -m 0640 /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem /etc/portkeeper/tls/privkey.pem
+```
+
+Set the admin section in `config.yaml`:
+
+```yaml
+admin:
+  enabled: true
+  listen_addr: "0.0.0.0:8083"
+  https: true
+  tls_cert_file: "/etc/portkeeper/tls/fullchain.pem"
+  tls_key_file: "/etc/portkeeper/tls/privkey.pem"
+```
+
+Restart PortKeeper. If HTTPS is enabled and the certificate or key is missing/invalid, PortKeeper fails to start the admin listener rather than silently falling back to HTTP. The admin UI will then be available at `https://YOUR_DOMAIN:8083/`.
+
+### What the admin UI can do
+
+- Log in using the local admin account; the browser receives an HttpOnly, SameSite=Strict session cookie.
+- View and edit TTL, rate-limit settings and GUID-to-port access rules.
+- Generate GUIDs and add/remove access rules.
+- Save config changes with a backup of the previous config.
+- Apply/rebuild the PortKeeper iptables/ip6tables and ipset rules with **Apply firewall rules**.
+
+The firewall action does **not** expose configured target ports to every Internet address. It reapplies the PortKeeper allowlist: only source IPs that have successfully called the corresponding GUID endpoint are accepted for the configured TCP port; other source IPs are dropped by the PortKeeper chain.
+
+The admin UI intentionally keeps the main API listener, state-file path and admin transport settings read-only. Change those host-level settings in `config.yaml` and restart the service. Saving editable settings in the UI updates the live GUID map, TTL and rate limiter without restarting the main service.
+
+The React source is in `web/admin`. The CI workflow installs Node.js dependencies, builds the frontend into the embedded assets directory, and then builds the single Go binary. Build locally with:
+
+```sh
+cd web/admin
+npm install
+npm run build
+cd ../..
+go test ./...
+go build -o portkeeper ./cmd/portkeeper
 ```

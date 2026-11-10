@@ -6,6 +6,15 @@ state_file: "/var/lib/portkeeper/state.json"
 rate_limit_requests: 10
 rate_limit_window: "1m"
 
+# Local web administration. The admin UI is served by the same binary.
+# HTTP is the default; enable HTTPS only after installing a readable certificate/key.
+admin:
+  enabled: true
+  listen_addr: "0.0.0.0:8083"
+  https: false
+  tls_cert_file: ""
+  tls_key_file: ""
+
 access:
   - guid: "REPLACE-WITH-SECRET-GUID-1"
     port: 8080

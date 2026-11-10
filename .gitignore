@@ -8,18 +8,18 @@
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
+# Test binary and coverage
 *.test
-
-# Code coverage profiles and other test artifacts
 *.out
 coverage.*
 !coverage.go
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
+# Dependency directories
 # vendor/
+node_modules/
+web/admin/node_modules/
 
 # Go workspace file
 go.work
