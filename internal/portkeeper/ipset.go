@@ -9,9 +9,10 @@ import (
 	"time"
 )
 
-type Firewall struct{}
+type Firewall struct { runCommand func(string, ...string) error }
 
-func (Firewall) run(name string, args ...string) error {
+func (f Firewall) run(name string, args ...string) error {
+	if f.runCommand != nil { return f.runCommand(name, args...) }
 	cmd := exec.Command(name, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -28,7 +29,35 @@ func setName(port uint16, ip net.IP) string {
 	return fmt.Sprintf("pk_%d_%s", port, family)
 }
 
+// Ensure retains the original temporary-only firewall behavior for legacy callers.
 func (f Firewall) Ensure(ports []uint16) error {
+	return f.ensure(ports, nil)
+}
+
+// EnsureRules installs permanent CIDR allowances ahead of temporary ipset
+// allowances and the final DROP. Multiple GUID rules for one port are merged.
+func (f Firewall) EnsureRules(rules []AccessRule) error {
+	ports := make([]uint16, 0, len(rules))
+	seenPorts := make(map[uint16]bool)
+	permanent := make(map[uint16][]string)
+	seenNetworks := make(map[uint16]map[string]bool)
+	for _, rule := range rules {
+		if !seenPorts[rule.Port] {
+			ports = append(ports, rule.Port)
+			seenPorts[rule.Port] = true
+		}
+		if seenNetworks[rule.Port] == nil { seenNetworks[rule.Port] = make(map[string]bool) }
+		for _, cidr := range rule.AllowedNetworks {
+			if !seenNetworks[rule.Port][cidr] {
+				permanent[rule.Port] = append(permanent[rule.Port], cidr)
+				seenNetworks[rule.Port][cidr] = true
+			}
+		}
+	}
+	return f.ensure(ports, permanent)
+}
+
+func (f Firewall) ensure(ports []uint16, permanent map[uint16][]string) error {
 	for _, port := range ports {
 		for _, family := range []string{"inet", "inet6"} {
 			name := fmt.Sprintf("pk_%d_%s", port, map[string]string{"inet": "v4", "inet6": "v6"}[family])
@@ -53,6 +82,14 @@ func (f Firewall) Ensure(ports []uint16) error {
 
 	for _, port := range ports {
 		p := strconv.Itoa(int(port))
+		for _, cidr := range permanent[port] {
+			ip, _, err := net.ParseCIDR(cidr)
+			if err != nil { return fmt.Errorf("invalid permanent CIDR %q for port %d: %w", cidr, port, err) }
+			command := "iptables"
+			if ip.To4() == nil { command = "ip6tables" }
+			if err := f.run(command, "-A", "PORTKEEPER", "-p", "tcp", "--dport", p,
+				"-s", cidr, "-j", "ACCEPT"); err != nil { return err }
+		}
 		if err := f.run("iptables", "-A", "PORTKEEPER", "-p", "tcp", "--dport", p, "-m", "set", "--match-set", fmt.Sprintf("pk_%d_v4", port), "src", "-j", "ACCEPT"); err != nil {
 			return err
 		}
