@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-type Rule = { guid: string; port: number };
+type Rule = { guid: string; port: number; allowed_networks?: string[] };
 type Config = {
   listen_addr: string;
   public_base_url: string;
@@ -168,21 +168,22 @@ export default function App() {
           </div>
         </section>
         <section className="panel">
-          <div className="section-title"><div><h2>Access Rules</h2><p className="muted">GUID сопоставляется с TCP-портом. Доступ можно выдать по GUID-запросу или кнопкой ниже прямо из админки на время TTL.</p></div><button className="secondary compact" onClick={() => setConfig({ ...config, access: [...config.access, { guid: newGuid(), port: 8080 }] })}>＋ Добавить правило</button></div>
+          <div className="section-title"><div><h2>Access Rules</h2><p className="muted">GUID сопоставляется с TCP-портом. Доступ можно выдать по GUID-запросу или кнопкой ниже прямо из админки на время TTL.</p></div><button className="secondary compact" onClick={() => setConfig({ ...config, access: [...config.access, { guid: newGuid(), port: 8080, allowed_networks: [] }] })}>＋ Добавить правило</button></div>
           <div className="rules">
             {config.access.map((rule, index) => <div className="rule" key={index}>
               <div className="rule-number">{String(index + 1).padStart(2, "0")}</div>
               <label className="guid-field">GUID<input value={rule.guid} onChange={(e) => updateRule(index, { guid: e.target.value })} spellCheck={false} /></label>
               <label className="port-field">TCP Port<input type="number" min="1" max="65535" value={rule.port} onChange={(e) => updateRule(index, { port: Number(e.target.value) })} /></label>
+              <label className="wide">Постоянно разрешённые сети (CIDR, по одной на строку)<textarea rows={3} spellCheck={false} placeholder={"160.79.104.0/21\n153.61.208.0/20"} value={(rule.allowed_networks ?? []).join("\n")} onChange={(e) => updateRule(index, { allowed_networks: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })} /><small className="muted">Действуют постоянно. Временные IP по GUID и TTL работают независимо.</small></label>
               <button className="icon-button danger-text" title="Удалить правило" onClick={() => setConfig({ ...config, access: config.access.filter((_, i) => i !== index) })}>×</button>
               <div className="rule-actions"><button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url}>Скопировать URL</button><button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy}>Открыть для моего IP</button></div>
             </div>)}
           </div>
-          <div className="rule-note">Порт не становится общедоступным: firewall пропускает только IP-адреса, которым выдан временный доступ через соответствующий GUID.</div>
+          <div className="rule-note">Порт доступен только временно разрешённым IP через GUID и постоянно разрешённым CIDR-сетям. Остальные блокируются.</div>
           <div className="footer-actions"><button className="secondary" onClick={loadConfig} disabled={busy}>Отменить изменения</button><button onClick={saveConfig} disabled={busy}>{busy ? "Сохранение…" : "Сохранить конфигурацию"}</button></div>
         </section>
         <section className="panel firewall-panel">
-          <div><h2>Firewall</h2><p className="muted">Повторно создать цепочки и правила PortKeeper на основе текущего списка Access Rules.</p></div>
+          <div><h2>Firewall</h2><p className="muted">Повторно создать цепочки и правила PortKeeper на основе текущего списка Access Rules, включая постоянные CIDR.</p></div>
           <button className="secondary" onClick={applyFirewall} disabled={busy}>Применить правила firewall</button>
         </section>
         <section className="security-note"><b>Административное соединение: {config.admin.https ? "HTTPS" : "HTTP"}</b><p>Админка слушает порт 8083. При HTTP логин и cookie передаются без TLS-шифрования. Для доступа через интернет настоятельно рекомендуется включить HTTPS и установить сертификат. Изменение TLS-параметров выполняется в config.yaml и требует перезапуска сервиса.</p></section>
