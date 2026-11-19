@@ -33,6 +33,7 @@ type AdminConfig struct {
 type AccessRule struct {
 	GUID string `yaml:"guid" json:"guid"`
 	Port uint16 `yaml:"port" json:"port"`
+	AllowedNetworks []string `yaml:"allowed_networks,omitempty" json:"allowed_networks,omitempty"`
 }
 
 func LoadConfig(path string) (Config, time.Duration, error) {
@@ -104,6 +105,19 @@ func ValidateConfig(cfg Config) (Config, time.Duration, error) {
 			return Config{}, 0, fmt.Errorf("duplicate GUID in access[%d]", i)
 		}
 		seenGUID[rule.GUID] = struct{}{}
+		seenNetworks := make(map[string]struct{}, len(rule.AllowedNetworks))
+		for j, cidr := range rule.AllowedNetworks {
+			ip, network, err := net.ParseCIDR(strings.TrimSpace(cidr))
+			if err != nil || ip == nil || network == nil {
+				return Config{}, 0, fmt.Errorf("access[%d].allowed_networks[%d] must be a valid IPv4 or IPv6 CIDR", i, j)
+			}
+			canonical := network.String()
+			if _, exists := seenNetworks[canonical]; exists {
+				return Config{}, 0, fmt.Errorf("access[%d].allowed_networks contains duplicate %s", i, canonical)
+			}
+			seenNetworks[canonical] = struct{}{}
+			cfg.Access[i].AllowedNetworks[j] = canonical
+		}
 	}
 	if cfg.Admin.Enabled {
 		if _, _, err := net.SplitHostPort(cfg.Admin.ListenAddr); err != nil {
