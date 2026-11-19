@@ -26,7 +26,8 @@ access:
 
   # Claude remote MCP: permanent Anthropic egress networks + temporary GUID access.
   # Verify the currently published Anthropic networks before production use.
-  - guid: "REPLACE-WITH-SECRET-GUID-443"
+  - service_name: "Claude MCP"
+    guid: "REPLACE-WITH-SECRET-GUID-443"
     port: 443
     allowed_networks:
       - "160.79.104.0/21"
