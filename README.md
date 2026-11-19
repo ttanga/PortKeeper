@@ -141,6 +141,44 @@ If using Nginx as a reverse proxy, the application can listen on `127.0.0.1:8787
 
 PortKeeper manages its own `PORTKEEPER` iptables/ip6tables chains and ipset sets for the configured target ports. Do not add permanent broad allow rules for those target ports: that could defeat the purpose of temporary access. If UFW or another firewall manager is active, verify the actual packet path and rules on the new VPS before relying on the service.
 
+## Permanent CIDR access alongside temporary PortKeeper grants
+
+Each `access` rule may include `allowed_networks` (IPv4 or IPv6 CIDR).
+These networks are permanently allowed to reach that TCP port, in addition
+to the existing temporary source-IP grants made through its GUID. Network
+entries are canonicalized and validated at configuration load and via the admin UI.
+
+```yaml
+access:
+  - guid: "REPLACE-WITH-SECRET-GUID-443"
+    port: 443
+    allowed_networks:
+      - "160.79.104.0/21"
+      - "153.61.208.0/20"
+```
+
+PortKeeper adds these CIDR ACCEPT rules before the per-port temporary
+`hash:ip` ipset ACCEPT rule and the final DROP. No change to the
+temporary grant TTL (24h by default) is needed. IPv6 is processed
+separately; with no IPv6 permanent networks, only temporary IPv6 grants
+are accepted. If several GUID rules target one port, their permanent
+networks are combined and deduplicated.
+
+These example networks are not updated automatically. Verify the current
+Anthropic published outbound CIDRs before enabling them and review changes
+as provider address ranges evolve.
+
+**Deployment warning:** the GitHub Actions workflow deploys the binary, not
+the VPS `config.yaml`. After deploying the new binary, add the 443 rule
+through the PortKeeper admin UI (which applies the configuration) or edit
+the VPS config and explicitly apply/restart PortKeeper. Verify the
+`PORTKEEPER` chain and test both the cloud and temporary-GUID paths.
+Do not remove general UFW 443 access before verifying the configured
+PortKeeper rule and its persistence across restart. Never add a temporary
+DROP above the CIDR ACCEPT entries. PortKeeper's INPUT jump is evaluated
+before UFW rules on the documented host, so UFW CIDR allowances alone
+cannot bypass PortKeeper's per-port DROP.
+
 ## 7. Configure GitHub Actions
 
 In the GitHub repository, open **Settings → Secrets and variables → Actions**.
