@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-type Rule = { guid: string; port: number; allowed_networks?: string[] };
+type Rule = { service_name?: string; guid: string; port: number; allowed_networks?: string[] };
 type Config = {
   listen_addr: string;
   public_base_url: string;
@@ -30,7 +30,7 @@ function newGuid() {
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return hex.toUpperCase();
 }
 
 export default function App() {
@@ -168,15 +168,30 @@ export default function App() {
           </div>
         </section>
         <section className="panel">
-          <div className="section-title"><div><h2>Access Rules</h2><p className="muted">GUID сопоставляется с TCP-портом. Доступ можно выдать по GUID-запросу или кнопкой ниже прямо из админки на время TTL.</p></div><button className="secondary compact" onClick={() => setConfig({ ...config, access: [...config.access, { guid: newGuid(), port: 8080, allowed_networks: [] }] })}>＋ Добавить правило</button></div>
+          <div className="section-title"><div><h2>Access Rules</h2><p className="muted">GUID сопоставляется с TCP-портом. Доступ можно выдать по GUID-запросу или кнопкой ниже прямо из админки на время TTL.</p></div><button className="secondary compact" onClick={() => setConfig({ ...config, access: [...config.access, { service_name: "", guid: newGuid(), port: 8080, allowed_networks: [] }] })}>＋ Добавить правило</button></div>
           <div className="rules">
             {config.access.map((rule, index) => <div className="rule" key={index}>
               <div className="rule-number">{String(index + 1).padStart(2, "0")}</div>
-              <label className="guid-field">GUID<input value={rule.guid} onChange={(e) => updateRule(index, { guid: e.target.value })} spellCheck={false} /></label>
-              <label className="port-field">TCP Port<input type="number" min="1" max="65535" value={rule.port} onChange={(e) => updateRule(index, { port: Number(e.target.value) })} /></label>
-              <label className="wide">Постоянно разрешённые сети (CIDR, по одной на строку)<textarea rows={3} spellCheck={false} placeholder={"160.79.104.0/21\n153.61.208.0/20"} value={(rule.allowed_networks ?? []).join("\n")} onChange={(e) => updateRule(index, { allowed_networks: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })} /><small className="muted">Действуют постоянно. Временные IP по GUID и TTL работают независимо.</small></label>
-              <button className="icon-button danger-text" title="Удалить правило" onClick={() => setConfig({ ...config, access: config.access.filter((_, i) => i !== index) })}>×</button>
-              <div className="rule-actions"><button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url}>Скопировать URL</button><button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy}>Открыть для моего IP</button></div>
+              <div className="rule-fields">
+                <label className="service-name-field">Название сервиса (необязательно)
+                  <input value={rule.service_name ?? ""} maxLength={120} placeholder="Например, Claude MCP" onChange={(e) => updateRule(index, { service_name: e.target.value })} />
+                </label>
+                <label className="guid-field">GUID
+                  <input value={rule.guid} onChange={(e) => updateRule(index, { guid: e.target.value })} spellCheck={false} />
+                </label>
+                <label className="port-field">TCP Port
+                  <input type="number" min="1" max="65535" value={rule.port} onChange={(e) => updateRule(index, { port: Number(e.target.value) })} />
+                </label>
+                <label className="cidr-field">Постоянно разрешённые сети (CIDR, по одной на строку)
+                  <textarea rows={3} spellCheck={false} placeholder={"160.79.104.0/21\n153.61.208.0/20"} value={(rule.allowed_networks ?? []).join("\n")} onChange={(e) => updateRule(index, { allowed_networks: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })} />
+                  <small className="muted">Действуют постоянно. Временные IP по GUID и TTL работают независимо.</small>
+                </label>
+                <div className="rule-actions">
+                  <button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url}>Скопировать URL</button>
+                  <button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy}>Открыть для моего IP</button>
+                </div>
+              </div>
+              <button className="icon-button danger-text" title="Удалить правило" aria-label="Удалить правило" onClick={() => setConfig({ ...config, access: config.access.filter((_, i) => i !== index) })}>×</button>
             </div>)}
           </div>
           <div className="rule-note">Порт доступен только временно разрешённым IP через GUID и постоянно разрешённым CIDR-сетям. Остальные блокируются.</div>
