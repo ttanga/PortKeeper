@@ -80,6 +80,15 @@ func (f Firewall) ensure(ports []uint16, permanent map[uint16][]string) error {
 		return err
 	}
 
+	// Loopback traffic must reach the host's ordinary firewall rules (UFW).
+	// PortKeeper runs before UFW in INPUT; without RETURN, per-port DROP
+	// rules also block connections to 127.0.0.1 and ::1 from this host.
+	for _, command := range []string{"iptables", "ip6tables"} {
+		if err := f.run(command, "-A", "PORTKEEPER", "-i", "lo", "-j", "RETURN"); err != nil {
+			return err
+		}
+	}
+
 	for _, port := range ports {
 		p := strconv.Itoa(int(port))
 		for _, cidr := range permanent[port] {
