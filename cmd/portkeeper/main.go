@@ -47,7 +47,7 @@ func main() {
 	}
 
 	fw := portkeeper.Firewall{}
-	if err := fw.Ensure(ports); err != nil {
+	if err := fw.EnsureRules(cfg.Access); err != nil {
 		log.Fatalf("firewall initialization failed: %v", err)
 	}
 
