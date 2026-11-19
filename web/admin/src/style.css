@@ -5,3 +5,20 @@
 @media(max-width:700px){.rule-grant{grid-column:2/-1;width:100%}}
 
 .rule-actions{grid-column:2/-1;display:flex;gap:8px;flex-wrap:wrap}.rule-actions button{padding:8px 12px;font-size:12px}@media(max-width:700px){.rule-actions{grid-column:2/-1;width:100%}.rule-actions button{flex:1}}
+
+/* Consistent dark-mode form controls for single- and multi-line inputs. */
+textarea{font:inherit;width:100%;min-width:0;background:#0d1728;color:#e7edf7;border:1px solid #30425c;border-radius:8px;padding:11px 12px;outline:none;resize:vertical;line-height:1.5}
+textarea:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #3b82f626}
+textarea::placeholder,input::placeholder{color:#657c9c}
+.rule{grid-template-columns:35px minmax(0,1fr) 35px;align-items:start}
+.rule-number{padding-top:30px}
+.rule-fields{display:grid;grid-template-columns:minmax(0,1fr) 130px;gap:12px;min-width:0}
+.service-name-field,.cidr-field,.rule-fields .rule-actions{grid-column:1/-1}
+.rule-fields .rule-actions{justify-self:start}
+.rule .icon-button{margin-top:24px}
+@media(max-width:700px){
+  .rule{grid-template-columns:25px minmax(0,1fr) 25px;gap:7px}
+  .rule-fields{grid-template-columns:minmax(0,1fr) 85px;gap:8px}
+  .rule-fields .rule-actions{width:100%;justify-self:stretch}
+  .rule-fields .rule-actions button{flex:1}
+}
