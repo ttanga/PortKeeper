@@ -56,3 +56,10 @@ textarea::placeholder,input::placeholder{color:#657c9c}
 .table-actions button{flex:0 0 auto;padding:7px 8px}
 .table-actions .delete-rule{margin-left:auto;flex:0 0 auto;padding:3px 7px}
 @media(max-width:700px){.access-table{min-width:1050px}.table-actions{flex-wrap:nowrap}}
+
+/* Expanded CIDR details belong to the rule immediately above. */
+.access-table .cidr-detail-row td{padding:0 8px 10px;background:#101e31;border-top:0}
+.access-table .cidr-detail-row .cidr-editor{margin:0;padding:14px 16px;border-color:#365273;border-top:2px solid #3b82f6}
+.access-table .cidr-detail-row .cidr-editor .section-title{white-space:normal}
+.access-table .cidr-detail-row textarea{display:block;max-width:100%;white-space:pre-wrap}
+.access-table .cidr-detail-row h3,.access-table .cidr-detail-row p{white-space:normal}
