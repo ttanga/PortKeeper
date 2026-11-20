@@ -40,6 +40,8 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [config, setConfig] = useState<Config | null>(null);
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState<"rules" | "settings">("rules");
+  const [expandedRule, setExpandedRule] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -108,6 +110,12 @@ export default function App() {
     }
   }
 
+  function openService(port: number) {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) { setError("Некорректный TCP-порт."); return; }
+    const url = `https://${window.location.hostname.includes(":") ? `[${window.location.hostname}]` : window.location.hostname}:${port}/`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   async function grantCurrentIP(port: number) {
     setBusy(true); setError(""); setMessage("");
     try {
@@ -153,10 +161,11 @@ export default function App() {
         <div className="top-actions"><span className="status"><i /> Local instance</span><button className="secondary compact" onClick={logout}>Выйти</button></div>
       </header>
       <main className="content">
-        <div className="page-heading"><div><p className="eyebrow">SERVER CONTROL</p><h1>Конфигурация</h1><p className="muted">Управление локальным экземпляром PortKeeper</p></div><span className="pill">Admin API · :8083</span></div>
+        <nav className="page-nav" aria-label="Разделы"><button className={page === "rules" ? "active" : "secondary"} onClick={() => setPage("rules")}>Access Rules</button><button className={page === "settings" ? "active" : "secondary"} onClick={() => setPage("settings")}>Настройки</button></nav>
+        <div className="page-heading"><div><p className="eyebrow">SERVER CONTROL</p><h1>{page === "rules" ? "Access Rules" : "Настройки"}</h1><p className="muted">{page === "rules" ? "Управление доступом к TCP-портам" : "Параметры PortKeeper и firewall"}</p></div></div>
         {error && <div className="notice error">{error}</div>}
         {message && <div className="notice success">{message}</div>}
-        <section className="panel">
+        {page === "settings" && <>        <section className="panel">
           <div className="section-title"><div><h2>Основные параметры</h2><p className="muted">Параметры API и ограничение частоты запросов</p></div></div>
           <div className="form-grid">
             <label>API Listen Address<input value={config.listen_addr} disabled /></label>
@@ -167,41 +176,26 @@ export default function App() {
             <label className="wide">State file<input value={config.state_file} disabled /></label>
           </div>
         </section>
-        <section className="panel">
-          <div className="section-title"><div><h2>Access Rules</h2><p className="muted">GUID сопоставляется с TCP-портом. Доступ можно выдать по GUID-запросу или кнопкой ниже прямо из админки на время TTL.</p></div><button className="secondary compact" onClick={() => setConfig({ ...config, access: [...config.access, { service_name: "", guid: newGuid(), port: 8080, allowed_networks: [] }] })}>＋ Добавить правило</button></div>
-          <div className="rules">
-            {config.access.map((rule, index) => <div className="rule" key={index}>
-              <div className="rule-number">{String(index + 1).padStart(2, "0")}</div>
-              <div className="rule-fields">
-                <label className="service-name-field">Название сервиса (необязательно)
-                  <input value={rule.service_name ?? ""} maxLength={120} placeholder="Например, Claude MCP" onChange={(e) => updateRule(index, { service_name: e.target.value })} />
-                </label>
-                <label className="guid-field">GUID
-                  <input value={rule.guid} onChange={(e) => updateRule(index, { guid: e.target.value })} spellCheck={false} />
-                </label>
-                <label className="port-field">TCP Port
-                  <input type="number" min="1" max="65535" value={rule.port} onChange={(e) => updateRule(index, { port: Number(e.target.value) })} />
-                </label>
-                <label className="cidr-field">Постоянно разрешённые сети (CIDR, по одной на строку)
-                  <textarea rows={3} spellCheck={false} placeholder={"160.79.104.0/21\n153.61.208.0/20"} value={(rule.allowed_networks ?? []).join("\n")} onChange={(e) => updateRule(index, { allowed_networks: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })} />
-                  <small className="muted">Действуют постоянно. Временные IP по GUID и TTL работают независимо.</small>
-                </label>
-                <div className="rule-actions">
-                  <button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url}>Скопировать URL</button>
-                  <button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy}>Открыть для моего IP</button>
-                </div>
-              </div>
-              <button className="icon-button danger-text" title="Удалить правило" aria-label="Удалить правило" onClick={() => setConfig({ ...config, access: config.access.filter((_, i) => i !== index) })}>×</button>
-            </div>)}
-          </div>
-          <div className="rule-note">Порт доступен только временно разрешённым IP через GUID и постоянно разрешённым CIDR-сетям. Остальные блокируются.</div>
-          <div className="footer-actions"><button className="secondary" onClick={loadConfig} disabled={busy}>Отменить изменения</button><button onClick={saveConfig} disabled={busy}>{busy ? "Сохранение…" : "Сохранить конфигурацию"}</button></div>
-        </section>
-        <section className="panel firewall-panel">
+          <div className="footer-actions"><button className="secondary" onClick={loadConfig} disabled={busy}>Отменить изменения</button><button onClick={saveConfig} disabled={busy}>Сохранить настройки</button></div>
+        </>}
+        {page === "rules" && <section className="panel">
+          <div className="section-title"><div><h2>Правила доступа</h2><p className="muted">Изменения применяются после сохранения конфигурации.</p></div><button className="secondary compact" onClick={() => { setConfig({ ...config, access: [...config.access, { service_name: "", guid: newGuid(), port: 8080, allowed_networks: [] }] }); setExpandedRule(config.access.length); }}>＋ Добавить правило</button></div>
+          <div className="table-scroll"><table className="access-table"><thead><tr><th>Сервис</th><th>GUID</th><th>TCP-порт</th><th>CIDR</th><th>Действия</th></tr></thead><tbody>
+            {config.access.map((rule, index) => <tr key={index}><td><input aria-label="Название сервиса" value={rule.service_name ?? ""} maxLength={120} placeholder="Название" onChange={e => updateRule(index, { service_name: e.target.value })}/></td>
+              <td><input className="guid-input" aria-label="GUID" value={rule.guid} spellCheck={false} onChange={e => updateRule(index, { guid: e.target.value })}/></td>
+              <td><input className="port-input" aria-label="TCP-порт" type="number" min="1" max="65535" value={rule.port} onChange={e => updateRule(index, { port: Number(e.target.value) })}/></td>
+              <td><button className="secondary compact" aria-expanded={expandedRule === index} onClick={() => setExpandedRule(expandedRule === index ? null : index)}>{(rule.allowed_networks ?? []).length} сетей {expandedRule === index ? "▴" : "▾"}</button></td>
+              <td><div className="table-actions"><button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url} title="Скопировать URL GUID">Копировать URL</button><button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy} title="Открыть для моего IP">Открыть IP</button><button className="secondary compact" onClick={() => openService(rule.port)} title="Открыть HTTPS-страницу сервиса в новой вкладке">Открыть в браузере</button><button className="icon-button danger-text" title="Удалить правило" aria-label="Удалить правило" onClick={() => { setConfig({ ...config, access: config.access.filter((_, i) => i !== index) }); setExpandedRule(null); }}>×</button></div></td></tr>)}
+          </tbody></table></div>
+          {expandedRule !== null && config.access[expandedRule] && <div className="cidr-editor"><div className="section-title"><div><h3>CIDR — {config.access[expandedRule].service_name || `порт ${config.access[expandedRule].port}`}</h3><p className="muted">Постоянно разрешённые сети, по одной на строку. Временный доступ по GUID работает отдельно.</p></div><button className="secondary compact" onClick={() => setExpandedRule(null)}>Свернуть</button></div><textarea rows={5} spellCheck={false} placeholder={"160.79.104.0/21\n153.61.208.0/20"} value={(config.access[expandedRule].allowed_networks ?? []).join("\n")} onChange={e => updateRule(expandedRule, { allowed_networks: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })}/></div>}
+          <div className="footer-actions"><button className="secondary" onClick={() => {loadConfig();setExpandedRule(null);}} disabled={busy}>Отменить изменения</button><button onClick={async () => {await saveConfig();}} disabled={busy}>{busy ? "Сохранение…" : "Сохранить конфигурацию"}</button></div>
+        </section>}
+        {page === "settings" && <>        <section className="panel firewall-panel">
           <div><h2>Firewall</h2><p className="muted">Повторно создать цепочки и правила PortKeeper на основе текущего списка Access Rules, включая постоянные CIDR.</p></div>
           <button className="secondary" onClick={applyFirewall} disabled={busy}>Применить правила firewall</button>
         </section>
         <section className="security-note"><b>Административное соединение: {config.admin.https ? "HTTPS" : "HTTP"}</b><p>Админка слушает порт 8083. При HTTP логин и cookie передаются без TLS-шифрования. Для доступа через интернет настоятельно рекомендуется включить HTTPS и установить сертификат. Изменение TLS-параметров выполняется в config.yaml и требует перезапуска сервиса.</p></section>
+        </>}
       </main>
     </div>
   );
