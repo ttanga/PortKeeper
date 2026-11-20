@@ -22,3 +22,22 @@ textarea::placeholder,input::placeholder{color:#657c9c}
   .rule-fields .rule-actions{width:100%;justify-self:stretch}
   .rule-fields .rule-actions button{flex:1}
 }
+
+/* Compact rules workspace */
+.page-nav{display:flex;gap:9px;flex-wrap:wrap}
+.page-nav button{padding:10px 16px}
+.page-nav .active{background:#2563eb}
+.table-scroll{overflow-x:auto;border:1px solid #30425c;border-radius:11px}
+.access-table{width:100%;border-collapse:collapse;min-width:880px;text-align:left}
+.access-table th{background:#15233a;color:#9db1cc;font-size:12px;padding:12px}
+.access-table td{padding:9px;border-top:1px solid #263852;vertical-align:middle}
+.access-table input{padding:9px;font-size:13px}
+.access-table .guid-input{font:12px ui-monospace,SFMono-Regular,monospace;min-width:210px}
+.access-table .port-input{min-width:78px;width:90px}
+.table-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:260px}
+.table-actions button{font-size:11px;padding:7px 9px;white-space:nowrap}
+.table-actions .icon-button{font-size:23px;padding:3px 9px}
+.cidr-editor{margin-top:16px;padding:16px;background:#0d1728;border:1px solid #30425c;border-radius:10px}
+.cidr-editor .section-title{margin-bottom:12px}
+.cidr-editor h3{font-size:15px;margin:0}
+@media(max-width:700px){.panel{padding:15px}.access-table{min-width:840px}.page-nav button{flex:1}}
