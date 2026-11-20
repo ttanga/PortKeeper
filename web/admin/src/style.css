@@ -41,3 +41,18 @@ textarea::placeholder,input::placeholder{color:#657c9c}
 .cidr-editor .section-title{margin-bottom:12px}
 .cidr-editor h3{font-size:15px;margin:0}
 @media(max-width:700px){.panel{padding:15px}.access-table{min-width:840px}.page-nav button{flex:1}}
+
+/* Keep every access rule on one compact line on desktop. */
+.access-table{min-width:1050px;table-layout:auto}
+.access-table th,.access-table td{white-space:nowrap}
+.access-table td{padding:6px 8px}
+.access-table input{padding:7px 8px}
+.access-table .guid-input{min-width:190px;width:100%}
+.access-table .port-input{min-width:70px;width:76px}
+.access-table th:nth-child(4),.access-table td:nth-child(4){width:1%;white-space:nowrap}
+.cidr-toggle{display:inline-flex;align-items:center;justify-content:flex-start;gap:5px;width:auto!important;min-width:0;padding:6px 8px!important;white-space:nowrap}
+.cidr-chevron{display:inline-block;margin-left:2px;font-size:12px;line-height:1}
+.table-actions{display:flex;flex-wrap:nowrap;gap:5px;min-width:0;justify-content:flex-end}
+.table-actions button{flex:0 0 auto;padding:7px 8px}
+.table-actions .delete-rule{margin-left:auto;flex:0 0 auto;padding:3px 7px}
+@media(max-width:700px){.access-table{min-width:1050px}.table-actions{flex-wrap:nowrap}}
