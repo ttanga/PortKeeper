@@ -1,6 +1,18 @@
 import { Fragment, useEffect, useState, type FormEvent } from "react";
 
 type Rule = { service_name?: string; guid: string; port: number; allowed_networks?: string[] };
+type AccessEntry = { port: number; ip: string; expires_at: string };
+type AccessStatus = { ip: string; entries: AccessEntry[] };
+
+function remainingTime(expiresAt: string, now: number) {
+  const seconds = Math.max(0, Math.ceil((Date.parse(expiresAt) - now) / 1000));
+  if (!seconds) return "";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  return hours ? `${hours} ч ${minutes} мин` : `${minutes} мин ${secs} сек`;
+}
+
 type Config = {
   listen_addr: string;
   public_base_url: string;
@@ -40,6 +52,8 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [config, setConfig] = useState<Config | null>(null);
   const [busy, setBusy] = useState(false);
+  const [accessStatus, setAccessStatus] = useState<AccessStatus | null>(null);
+  const [now, setNow] = useState(Date.now());
   const [page, setPage] = useState<"rules" | "settings">("rules");
   const [expandedRule, setExpandedRule] = useState<number | null>(null);
   const [message, setMessage] = useState("");
@@ -55,6 +69,26 @@ export default function App() {
   useEffect(() => {
     if (authenticated) loadConfig();
   }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    void loadAccessStatus();
+    const timer = window.setInterval(() => { void loadAccessStatus(); }, 30000);
+    return () => window.clearInterval(timer);
+  }, [authenticated]);
+
+  async function loadAccessStatus() {
+    try {
+      const response = await api("/api/access/current-ip/status");
+      setAccessStatus(await response.json() as AccessStatus);
+    } catch { setAccessStatus(null); }
+  }
 
   async function loadConfig() {
     setError("");
@@ -121,13 +155,15 @@ export default function App() {
     try {
       const response = await api("/api/access/current-ip", { method: "POST", body: JSON.stringify({ port }) });
       const result = await response.json();
+      setAccessStatus(previous => ({ ip: result.ip, entries: [...(previous?.ip === result.ip ? previous.entries.filter(entry => entry.port !== result.port) : []), { port: result.port, ip: result.ip, expires_at: result.expires_at }] }));
+      setNow(Date.now());
       setMessage(`Доступ к TCP-порту ${result.port} открыт для IP ${result.ip} до ${new Date(result.expires_at).toLocaleString()}.`);
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   }
 
   async function logout() {
-    try { await api("/api/logout", { method: "POST" }); } finally { setAuthenticated(false); setConfig(null); }
+    try { await api("/api/logout", { method: "POST" }); } finally { setAuthenticated(false); setConfig(null); setAccessStatus(null); }
   }
 
   function updateRule(index: number, patch: Partial<Rule>) {
@@ -185,7 +221,7 @@ export default function App() {
               <td><input className="guid-input" aria-label="GUID" value={rule.guid} spellCheck={false} onChange={e => updateRule(index, { guid: e.target.value })}/></td>
               <td><input className="port-input" aria-label="TCP-порт" type="number" min="1" max="65535" value={rule.port} onChange={e => updateRule(index, { port: Number(e.target.value) })}/></td>
               <td><button className="secondary compact cidr-toggle" aria-expanded={expandedRule === index} onClick={() => setExpandedRule(expandedRule === index ? null : index)}><span>{(rule.allowed_networks ?? []).length} сетей</span><span className="cidr-chevron" aria-hidden="true">{expandedRule === index ? "▴" : "▾"}</span></button></td>
-              <td><div className="table-actions"><button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url} title="Скопировать URL GUID">Копировать URL</button><button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy} title="Открыть для моего IP">Открыть IP</button><button className="secondary compact" onClick={() => openService(rule.port)} title="Открыть HTTPS-страницу сервиса в новой вкладке">Открыть в браузере</button><button className="icon-button danger-text delete-rule" title="Удалить правило" aria-label="Удалить правило" onClick={() => { setConfig({ ...config, access: config.access.filter((_, i) => i !== index) }); setExpandedRule(null); }}>×</button></div></td></tr>
+              <td><div className="table-actions"><button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url} title="Скопировать URL GUID">Копировать URL</button><button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy} title="Открыть для моего IP">Открыть IP</button>{(() => { const entry = accessStatus?.entries.find(item => item.port === rule.port && Date.parse(item.expires_at) > now); return entry ? <span className="access-remaining" title={`IP ${entry.ip}, до ${new Date(entry.expires_at).toLocaleString()}`}>● Доступен · {remainingTime(entry.expires_at, now)}</span> : null; })()}<button className="secondary compact" onClick={() => openService(rule.port)} title="Открыть HTTPS-страницу сервиса в новой вкладке">Открыть в браузере</button><button className="icon-button danger-text delete-rule" title="Удалить правило" aria-label="Удалить правило" onClick={() => { setConfig({ ...config, access: config.access.filter((_, i) => i !== index) }); setExpandedRule(null); }}>×</button></div></td></tr>
               {expandedRule === index && <tr className="cidr-detail-row"><td colSpan={5}><div className="cidr-editor"><div className="section-title"><div><h3>CIDR — {rule.service_name || `порт ${rule.port}`}</h3><p className="muted">Постоянно разрешённые сети, по одной на строку. Временный доступ по GUID работает отдельно.</p></div><button className="secondary compact" onClick={() => setExpandedRule(null)}>Свернуть</button></div><textarea rows={5} spellCheck={false} placeholder={"160.79.104.0/21\n153.61.208.0/20"} value={(rule.allowed_networks ?? []).join("\n")} onChange={e => updateRule(index, { allowed_networks: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })}/></div></td></tr>}
             </Fragment>)}
           </tbody></table></div>
