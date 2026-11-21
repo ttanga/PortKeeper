@@ -63,3 +63,55 @@ textarea::placeholder,input::placeholder{color:#657c9c}
 .access-table .cidr-detail-row .cidr-editor .section-title{white-space:normal}
 .access-table .cidr-detail-row textarea{display:block;max-width:100%;white-space:pre-wrap}
 .access-table .cidr-detail-row h3,.access-table .cidr-detail-row p{white-space:normal}
+
+
+/* Mobile access rules: readable cards instead of a 1050px-wide table. */
+@media (max-width:700px) {
+  .app-shell,.content,.panel{min-width:0;max-width:100%}
+  .page-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .page-nav button{min-width:0;width:100%;padding:10px 8px;white-space:normal}
+  .section-title>button{max-width:100%;white-space:normal}
+  .table-scroll{overflow:visible;border:0;border-radius:0}
+  .access-table{display:block;width:100%;min-width:0;table-layout:auto}
+  .access-table thead{display:none}
+  .access-table tbody{display:grid;gap:12px}
+  .access-table tbody>tr:not(.cidr-detail-row){
+    display:grid;grid-template-columns:minmax(0,1fr);
+    min-width:0;border:1px solid #30425c;border-radius:11px;
+    background:#0d1728;padding:10px;gap:9px
+  }
+  .access-table tbody>tr:not(.cidr-detail-row)>td{
+    display:grid;grid-template-columns:82px minmax(0,1fr);
+    align-items:center;gap:8px;min-width:0;width:100%;
+    padding:0;border:0;white-space:normal
+  }
+  .access-table tbody>tr:not(.cidr-detail-row)>td::before{
+    color:#9db1cc;font-size:12px;font-weight:650
+  }
+  .access-table tbody>tr:not(.cidr-detail-row)>td:nth-child(1)::before{content:"Сервис"}
+  .access-table tbody>tr:not(.cidr-detail-row)>td:nth-child(2)::before{content:"GUID"}
+  .access-table tbody>tr:not(.cidr-detail-row)>td:nth-child(3)::before{content:"TCP-порт"}
+  .access-table tbody>tr:not(.cidr-detail-row)>td:nth-child(4)::before{content:"CIDR"}
+  .access-table tbody>tr:not(.cidr-detail-row)>td:nth-child(5){
+    display:block;padding-top:8px;border-top:1px solid #263852
+  }
+  .access-table tbody>tr:not(.cidr-detail-row)>td:nth-child(5)::before{
+    content:"Действия";display:block;margin-bottom:8px
+  }
+  .access-table input,.access-table .guid-input,.access-table .port-input{
+    width:100%;min-width:0;max-width:100%;font-size:13px
+  }
+  .access-table .guid-input{font-size:11px}
+  .access-table .cidr-toggle{max-width:100%}
+  .table-actions{display:flex;flex-wrap:wrap;justify-content:flex-start;min-width:0;gap:7px}
+  .table-actions button{flex:0 1 auto;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+  .table-actions .delete-rule{margin-left:auto}
+  .access-table tbody>tr.cidr-detail-row{display:block;min-width:0;margin-top:-12px}
+  .access-table .cidr-detail-row td{display:block;min-width:0;padding:0}
+  .access-table .cidr-detail-row .cidr-editor{
+    min-width:0;margin:0;border-radius:0 0 11px 11px;padding:12px
+  }
+  .access-table .cidr-detail-row .section-title{gap:10px}
+  .access-table .cidr-detail-row .section-title button{align-self:flex-start}
+  .access-table .cidr-detail-row textarea{min-width:0;width:100%}
+}
