@@ -187,6 +187,20 @@ func (s *Server) GrantAccess(port uint16, ip net.IP) (time.Time, error) {
 	return expiresAt, nil
 }
 
+// CurrentIPAccess returns active temporary grants for the given peer IP.
+func (s *Server) CurrentIPAccess(ip net.IP) []AccessState {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	result := make([]AccessState, 0)
+	for _, entry := range s.entries {
+		if entry.IP == ip.String() && entry.ExpiresAt.After(now) {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
 func stateKey(port uint16, ip string) string {
 	return fmt.Sprintf("%d|%s", port, ip)
 }
