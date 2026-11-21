@@ -115,3 +115,7 @@ textarea::placeholder,input::placeholder{color:#657c9c}
   .access-table .cidr-detail-row .section-title button{align-self:flex-start}
   .access-table .cidr-detail-row textarea{min-width:0;width:100%}
 }
+
+/* Current IP access countdown, including narrow mobile rule cards. */
+.access-remaining{display:inline-flex;align-items:center;max-width:100%;font-size:12px;font-weight:650;color:#6ee7b7;white-space:nowrap;font-variant-numeric:tabular-nums}
+@media(max-width:700px){.table-actions .access-remaining{flex:0 1 auto;white-space:normal}}
