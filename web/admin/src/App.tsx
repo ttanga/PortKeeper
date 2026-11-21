@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, useRef, type FormEvent } from "react";
 
-type Rule = { service_name?: string; guid: string; port: number; allowed_networks?: string[] };
+type Rule = { service_name?: string; guid: string; port: number; path?: string; allowed_networks?: string[] };
 type AccessEntry = { port: number; ip: string; expires_at: string };
 type AccessStatus = { ip: string; entries: AccessEntry[] };
 
@@ -56,6 +56,8 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const [page, setPage] = useState<"rules" | "settings">("rules");
   const [expandedRule, setExpandedRule] = useState<number | null>(null);
+  const [expandedPath, setExpandedPath] = useState<number | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -119,6 +121,43 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  async function exportSettings() {
+    setError(""); setMessage("");
+    try {
+      const response = await api("/api/config");
+      const saved = await response.json() as Config;
+      const blob = new Blob([JSON.stringify({ format: "portkeeper-settings", version: 1, config: saved }, null, 2) + "\n"], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = "portkeeper-settings.json";
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      URL.revokeObjectURL(url);
+      setMessage("Экспортирована сохранённая конфигурация.");
+    } catch (e) { setError(String(e)); }
+  }
+
+  async function importSettings(file: File) {
+    setError(""); setMessage("");
+    try {
+      if (file.size > 1024 * 1024) throw new Error("JSON-файл слишком большой (максимум 1 МБ).");
+      const payload: unknown = JSON.parse(await file.text());
+      if (!payload || typeof payload !== "object") throw new Error("Неверный формат JSON.");
+      const envelope = payload as Record<string, unknown>;
+      if (envelope.format !== "portkeeper-settings" || envelope.version !== 1 || !envelope.config || typeof envelope.config !== "object")
+        throw new Error("Неподдерживаемый формат или версия экспорта PortKeeper.");
+      const imported = envelope.config as Config;
+      if (!Array.isArray(imported.access) || !imported.admin || typeof imported.default_ttl !== "string" || typeof imported.public_base_url !== "string")
+        throw new Error("Файл не содержит корректную конфигурацию.");
+      if (!window.confirm("Импорт заменит текущие настройки и правила доступа. Конфигурация будет сразу сохранена и применена. Продолжить?")) return;
+      setBusy(true);
+      const response = await api("/api/config", { method: "PUT", body: JSON.stringify(imported) });
+      const result = await response.json();
+      setConfig(result.config); setExpandedRule(null); setExpandedPath(null);
+      setMessage("Настройки импортированы и применены." + (result.restart_required ? " Для применения TLS-настроек нужен перезапуск PortKeeper." : ""));
+    } catch (e) { setError(String(e)); }
+    finally { setBusy(false); if (importInput.current) importInput.current.value = ""; }
+  }
+
   async function applyFirewall() {
     setBusy(true); setError(""); setMessage("");
     try {
@@ -144,9 +183,9 @@ export default function App() {
     }
   }
 
-  function openService(port: number) {
+  function openService(port: number, path = "/") {
     if (!Number.isInteger(port) || port < 1 || port > 65535) { setError("Некорректный TCP-порт."); return; }
-    const url = `https://${window.location.hostname.includes(":") ? `[${window.location.hostname}]` : window.location.hostname}:${port}/`;
+    const url = `https://${window.location.hostname.includes(":") ? `[${window.location.hostname}]` : window.location.hostname}:${port}${path || "/"}`;
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
@@ -201,7 +240,16 @@ export default function App() {
         <div className="page-heading"><div><p className="eyebrow">SERVER CONTROL</p><h1>{page === "rules" ? "Access Rules" : "Настройки"}</h1><p className="muted">{page === "rules" ? "Управление доступом к TCP-портам" : "Параметры PortKeeper и firewall"}</p></div></div>
         {error && <div className="notice error">{error}</div>}
         {message && <div className="notice success">{message}</div>}
-        {page === "settings" && <>        <section className="panel">
+        {page === "settings" && <>
+          <section className="panel settings-transfer">
+            <div><h2>Экспорт и импорт</h2><p className="muted">JSON включает настройки и Access Rules (в том числе GUID, CIDR и Path). Пароль администратора и сессии не экспортируются. Импорт сразу применяет правила.</p></div>
+            <div className="transfer-actions">
+              <button className="secondary compact" disabled={busy} onClick={exportSettings}>Экспорт JSON</button>
+              <button className="secondary compact" disabled={busy} onClick={() => importInput.current?.click()}>Импорт JSON</button>
+              <input ref={importInput} className="hidden-file" type="file" accept=".json,application/json" aria-label="Файл импорта PortKeeper" onChange={e => { const file = e.target.files?.[0]; if (file) void importSettings(file); }} />
+            </div>
+          </section>
+          <section className="panel">
           <div className="section-title"><div><h2>Основные параметры</h2><p className="muted">Параметры API и ограничение частоты запросов</p></div></div>
           <div className="form-grid">
             <label>API Listen Address<input value={config.listen_addr} disabled /></label>
@@ -215,13 +263,14 @@ export default function App() {
           <div className="footer-actions"><button className="secondary" onClick={loadConfig} disabled={busy}>Отменить изменения</button><button onClick={saveConfig} disabled={busy}>Сохранить настройки</button></div>
         </>}
         {page === "rules" && <section className="panel">
-          <div className="section-title"><div><h2>Правила доступа</h2><p className="muted">Изменения применяются после сохранения конфигурации.</p></div><button className="secondary compact" onClick={() => { setConfig({ ...config, access: [...config.access, { service_name: "", guid: newGuid(), port: 8080, allowed_networks: [] }] }); setExpandedRule(config.access.length); }}>＋ Добавить правило</button></div>
+          <div className="section-title"><div><h2>Правила доступа</h2><p className="muted">Изменения применяются после сохранения конфигурации.</p></div><button className="secondary compact" onClick={() => { setConfig({ ...config, access: [...config.access, { service_name: "", guid: newGuid(), port: 8080, path: "/", allowed_networks: [] }] }); setExpandedRule(config.access.length); }}>＋ Добавить правило</button></div>
           <div className="table-scroll"><table className="access-table"><thead><tr><th>Сервис</th><th>GUID</th><th>TCP-порт</th><th>CIDR</th><th>Действия</th></tr></thead><tbody>
             {config.access.map((rule, index) => <Fragment key={index}><tr><td><input aria-label="Название сервиса" value={rule.service_name ?? ""} maxLength={120} placeholder="Название" onChange={e => updateRule(index, { service_name: e.target.value })}/></td>
               <td><input className="guid-input" aria-label="GUID" value={rule.guid} spellCheck={false} onChange={e => updateRule(index, { guid: e.target.value })}/></td>
               <td><input className="port-input" aria-label="TCP-порт" type="number" min="1" max="65535" value={rule.port} onChange={e => updateRule(index, { port: Number(e.target.value) })}/></td>
               <td><button className="secondary compact cidr-toggle" aria-expanded={expandedRule === index} onClick={() => setExpandedRule(expandedRule === index ? null : index)}><span>{(rule.allowed_networks ?? []).length} сетей</span><span className="cidr-chevron" aria-hidden="true">{expandedRule === index ? "▴" : "▾"}</span></button></td>
-              <td><div className="table-actions"><button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url} title="Скопировать URL GUID">Копировать URL</button><button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy} title="Открыть для моего IP">Открыть IP</button>{(() => { const entry = accessStatus?.entries.find(item => item.port === rule.port && Date.parse(item.expires_at) > now); return entry ? <span className="access-remaining" title={`IP ${entry.ip}, до ${new Date(entry.expires_at).toLocaleString()}`}>● Доступен · {remainingTime(entry.expires_at, now)}</span> : null; })()}<button className="secondary compact" onClick={() => openService(rule.port)} title="Открыть HTTPS-страницу сервиса в новой вкладке">Открыть в браузере</button><button className="icon-button danger-text delete-rule" title="Удалить правило" aria-label="Удалить правило" onClick={() => { setConfig({ ...config, access: config.access.filter((_, i) => i !== index) }); setExpandedRule(null); }}>×</button></div></td></tr>
+              <td><div className="table-actions"><button className="secondary compact" onClick={() => copyGuidURL(rule.guid)} disabled={busy || !config.public_base_url} title="Скопировать URL GUID">Копировать URL</button><button className="secondary compact" onClick={() => grantCurrentIP(rule.port)} disabled={busy} title="Открыть для моего IP">Открыть IP</button>{(() => { const entry = accessStatus?.entries.find(item => item.port === rule.port && Date.parse(item.expires_at) > now); return entry ? <span className="access-remaining" title={`IP ${entry.ip}, до ${new Date(entry.expires_at).toLocaleString()}`}>● Доступен · {remainingTime(entry.expires_at, now)}</span> : null; })()}<button className="secondary compact" onClick={() => openService(rule.port, rule.path)} title="Открыть HTTPS-страницу сервиса в новой вкладке">Открыть в браузере</button><button className="secondary compact path-toggle" aria-label="Редактировать Path" title="Редактировать путь URL" aria-expanded={expandedPath === index} onClick={() => { setExpandedPath(expandedPath === index ? null : index); setExpandedRule(null); }}>▾</button><button className="icon-button danger-text delete-rule" title="Удалить правило" aria-label="Удалить правило" onClick={() => { setConfig({ ...config, access: config.access.filter((_, i) => i !== index) }); setExpandedRule(null); }}>×</button></div></td></tr>
+              {expandedPath === index && <tr className="cidr-detail-row"><td colSpan={5}><div className="cidr-editor path-editor"><div className="section-title"><div><h3>Path — {rule.service_name || `порт ${rule.port}`}</h3><p className="muted">Путь после порта. Начинается с /; по умолчанию /.</p></div><button className="secondary compact" onClick={() => setExpandedPath(null)}>Свернуть</button></div><input aria-label="Path сервиса" value={rule.path ?? "/"} placeholder="/" onChange={e => updateRule(index, { path: e.target.value })} /></div></td></tr>}
               {expandedRule === index && <tr className="cidr-detail-row"><td colSpan={5}><div className="cidr-editor"><div className="section-title"><div><h3>CIDR — {rule.service_name || `порт ${rule.port}`}</h3><p className="muted">Постоянно разрешённые сети, по одной на строку. Временный доступ по GUID работает отдельно.</p></div><button className="secondary compact" onClick={() => setExpandedRule(null)}>Свернуть</button></div><textarea rows={5} spellCheck={false} placeholder={"160.79.104.0/21\n153.61.208.0/20"} value={(rule.allowed_networks ?? []).join("\n")} onChange={e => updateRule(index, { allowed_networks: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })}/></div></td></tr>}
             </Fragment>)}
           </tbody></table></div>

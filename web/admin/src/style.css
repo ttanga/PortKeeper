@@ -119,3 +119,13 @@ textarea::placeholder,input::placeholder{color:#657c9c}
 /* Current IP access countdown, including narrow mobile rule cards. */
 .access-remaining{display:inline-flex;align-items:center;max-width:100%;font-size:12px;font-weight:650;color:#6ee7b7;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media(max-width:700px){.table-actions .access-remaining{flex:0 1 auto;white-space:normal}}
+
+/* Path editor and JSON settings transfer */
+.path-toggle{min-width:28px!important;padding:7px 8px!important;line-height:1}
+.path-editor input{width:100%;max-width:520px}
+.settings-transfer{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.settings-transfer h2{font-size:17px;margin:0 0 5px}
+.settings-transfer p{margin:0}
+.transfer-actions{display:flex;gap:8px;flex-shrink:0}
+.hidden-file{display:none}
+@media(max-width:700px){.settings-transfer{flex-direction:column;align-items:stretch}.transfer-actions{flex-wrap:wrap}.transfer-actions button{flex:1}}

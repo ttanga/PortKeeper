@@ -32,6 +32,7 @@ type AdminConfig struct {
 
 type AccessRule struct {
 	ServiceName string `yaml:"service_name,omitempty" json:"service_name,omitempty"`
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 	GUID string `yaml:"guid" json:"guid"`
 	Port uint16 `yaml:"port" json:"port"`
 	AllowedNetworks []string `yaml:"allowed_networks,omitempty" json:"allowed_networks,omitempty"`
@@ -97,6 +98,10 @@ func ValidateConfig(cfg Config) (Config, time.Duration, error) {
 	seenGUID := make(map[string]struct{}, len(cfg.Access))
 	for i, rule := range cfg.Access {
 		cfg.Access[i].ServiceName = strings.TrimSpace(rule.ServiceName)
+		if rule.Path == "" { cfg.Access[i].Path = "/" } else {
+			if !strings.HasPrefix(rule.Path, "/") || strings.HasPrefix(rule.Path, "//") || strings.ContainsAny(rule.Path, "?#\\") || strings.ContainsAny(rule.Path, "\r\n\t") { return Config{}, 0, fmt.Errorf("access[%d].path must be a relative URL path starting with /, without query or fragment", i) }
+			cfg.Access[i].Path = rule.Path
+		}
 		if len([]rune(cfg.Access[i].ServiceName)) > 120 { return Config{}, 0, fmt.Errorf("access[%d].service_name must contain at most 120 characters", i) }
 		if rule.GUID == "" {
 			return Config{}, 0, fmt.Errorf("access[%d].guid is empty", i)
