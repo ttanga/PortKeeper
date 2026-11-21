@@ -238,6 +238,7 @@ func NewAdminHandler(configPath string, service *Server) (http.Handler, error) {
 	mux.Handle("/api/config", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.configHandler)))
 	mux.Handle("/api/firewall/apply", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.applyFirewallHandler)))
 	mux.Handle("/api/access/current-ip", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.grantCurrentIPHandler)))
+	mux.Handle("/api/access/current-ip/status", controller.authorize(creds.Username, secret, sessions, http.HandlerFunc(controller.currentIPStatusHandler)))
 
 	staticFS, err := webadmin.SubFS()
 	if err != nil {
@@ -412,6 +413,24 @@ func (c *adminController) grantCurrentIPHandler(w http.ResponseWriter, r *http.R
 		"granted": true, "ip": ip.String(), "port": input.Port,
 		"expires_at": expiresAt.UTC().Format(time.RFC3339),
 		"expires_in": int64(time.Until(expiresAt).Seconds()),
+	})
+}
+
+func (c *adminController) currentIPStatusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	// Use the TCP peer, not untrusted X-Forwarded-For / X-Real-IP.
+	ip, err := remoteIP(r.RemoteAddr)
+	if err != nil {
+		http.Error(w, "unable to determine client IP", http.StatusBadRequest)
+		return
+	}
+	entries := c.service.CurrentIPAccess(ip)
+	writeAdminJSON(w, http.StatusOK, map[string]any{
+		"ip": ip.String(), "entries": entries,
 	})
 }
 
