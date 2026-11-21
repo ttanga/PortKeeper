@@ -155,7 +155,7 @@ export default function App() {
     try {
       const response = await api("/api/access/current-ip", { method: "POST", body: JSON.stringify({ port }) });
       const result = await response.json();
-      setAccessStatus(previous => ({ ip: result.ip, entries: [...(previous?.ip === result.ip ? previous.entries.filter(entry => entry.port !== result.port) : []), { port: result.port, ip: result.ip, expires_at: result.expires_at }] }));
+      setAccessStatus(previous => ({ ip: result.ip, entries: [...(previous && previous.ip === result.ip ? previous.entries.filter(entry => entry.port !== result.port) : []), { port: result.port, ip: result.ip, expires_at: result.expires_at }] }));
       setNow(Date.now());
       setMessage(`Доступ к TCP-порту ${result.port} открыт для IP ${result.ip} до ${new Date(result.expires_at).toLocaleString()}.`);
     } catch (e) { setError(String(e)); }
