@@ -41,6 +41,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("configuration error: %v", err)
 	}
+	var sharedTLS *tls.Config
+	if cfg.Admin.HTTPS {
+		cert, err := tls.LoadX509KeyPair(cfg.Admin.TLSCertFile, cfg.Admin.TLSKeyFile)
+		if err != nil {
+			log.Fatalf("load PortKeeper TLS certificate/key: %v", err)
+		}
+		sharedTLS = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+	}
 	ports := make([]uint16, 0, len(cfg.Access))
 	for _, rule := range cfg.Access {
 		ports = append(ports, rule.Port)
@@ -86,12 +94,7 @@ func main() {
 		}
 		adminHTTP := &http.Server{Handler: adminHandler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 		if cfg.Admin.HTTPS {
-			cert, err := tls.LoadX509KeyPair(cfg.Admin.TLSCertFile, cfg.Admin.TLSKeyFile)
-			if err != nil {
-				_ = listener.Close()
-				log.Fatalf("load admin TLS certificate/key: %v", err)
-			}
-			tlsListener := tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12})
+			tlsListener := tls.NewListener(listener, sharedTLS.Clone())
 			go func() {
 				log.Printf("PortKeeper Admin listening with HTTPS on %s", cfg.Admin.ListenAddr)
 				if err := adminHTTP.Serve(tlsListener); err != nil && err != http.ErrServerClosed {
@@ -110,8 +113,16 @@ func main() {
 	}
 
 	httpServer := &http.Server{Addr: cfg.ListenAddr, Handler: server, ReadHeaderTimeout: 5 * time.Second}
-	log.Printf("PortKeeper listening on %s", cfg.ListenAddr)
-	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	var serveErr error
+	if sharedTLS != nil {
+		httpServer.TLSConfig = sharedTLS.Clone()
+		log.Printf("PortKeeper API listening with HTTPS on %s", cfg.ListenAddr)
+		serveErr = httpServer.ListenAndServeTLS("", "")
+	} else {
+		log.Printf("PortKeeper API listening with HTTP on %s", cfg.ListenAddr)
+		serveErr = httpServer.ListenAndServe()
+	}
+	if err := serveErr; err != nil && err != http.ErrServerClosed {
 		log.Printf("HTTP server stopped: %v", err)
 		os.Exit(1)
 	}
