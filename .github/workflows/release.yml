@@ -1,0 +1,51 @@
+name: PortKeeper Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund && npm run build
+        working-directory: web/admin
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - run: go test ./...
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p dist stage
+          cp configs/config.example.yaml deploy/systemd/portkeeper.service stage/
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags="-s -w" -o stage/portkeeper ./cmd/portkeeper
+            tar -czf "dist/portkeeper-linux-$arch.tar.gz" -C stage portkeeper config.example.yaml portkeeper.service
+          done
+          cp deploy/scripts/install-release.sh dist/install.sh
+          bash -n dist/install.sh
+          cd dist
+          sha256sum portkeeper-linux-*.tar.gz install.sh > checksums.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portkeeper-release
+          path: dist/
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "$TAG" --generate-notes
