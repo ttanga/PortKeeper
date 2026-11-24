@@ -153,8 +153,8 @@ func ValidateConfig(cfg Config) (Config, time.Duration, error) {
 			return Config{}, 0, fmt.Errorf("admin.listen_addr must use a different port from listen_addr")
 		}
 	}
-	if cfg.Admin.Enabled && cfg.Admin.HTTPS && (cfg.Admin.TLSCertFile == "" || cfg.Admin.TLSKeyFile == "") {
-		return Config{}, 0, fmt.Errorf("admin HTTPS requires tls_cert_file and tls_key_file")
+	if cfg.Admin.HTTPS && (cfg.Admin.TLSCertFile == "" || cfg.Admin.TLSKeyFile == "") {
+		return Config{}, 0, fmt.Errorf("PortKeeper HTTPS requires tls_cert_file and tls_key_file")
 	}
 	return cfg, ttl, nil
 }
