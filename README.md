@@ -422,7 +422,9 @@ sudo systemctl status portkeeper --no-pager
 
 Open `http://YOUR_VPS_HOST:8083/` in a browser. **Plain HTTP is not safe for an admin interface exposed to the Internet:** credentials and session cookies can be intercepted. Use HTTPS as soon as possible.
 
-### Enable HTTPS
+### Enable HTTPS for both API and admin
+
+The existing `admin.https`, `admin.tls_cert_file` and `admin.tls_key_file` settings now apply to both listeners, even when the admin listener is disabled. When enabling HTTPS, set `public_base_url` to the HTTPS API origin (for example `https://datapasa.top:8787`) and update any existing HTTP clients. Restart the service to apply TLS changes. Existing reverse proxies must use HTTPS upstream when native TLS is enabled.
 
 Install a certificate and private key readable by the `portkeeper` group. For Let's Encrypt, copy the current files into a dedicated directory (renewal automation must refresh these copies):
 
