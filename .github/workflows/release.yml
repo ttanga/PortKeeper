@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag (e.g. v1.0.0)'
+        description: 'Release version (e.g. 1.0.0 or v1.0.0)'
         required: true
         type: string
 permissions:
@@ -47,5 +47,9 @@ jobs:
           TAG: ${{ inputs.version || github.ref_name }}
         run: |
           set -euo pipefail
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          TAG="v${TAG#v}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid release version: $TAG (expected 1.2.3 or v1.2.3)"
+            exit 1
+          fi
           gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "$TAG" --generate-notes
