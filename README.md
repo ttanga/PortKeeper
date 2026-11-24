@@ -472,3 +472,32 @@ go build -o portkeeper ./cmd/portkeeper
 ### Protected interfaces
 
 Set `firewall.protected_interfaces: ["eth0"]` (or use the admin Settings page) to restrict PortKeeper policy to the named ingress interfaces. An empty list preserves legacy behavior. Other interfaces fall through to the host firewall. Existing PORTKEEPER rules are flushed and rebuilt with interface matches for IPv4 and IPv6; the INPUT jump remains a dispatcher. Verify host firewall policy before enabling this option. Interface names must exist on the host.
+
+#### Internal HTTPS from Docker (UFW)
+
+When PortKeeper protects only the external interface (for example `eth0`), configure internal access separately in UFW. For the Mod CRM deployment, inspect the Docker network and host interfaces first:
+
+```bash
+docker inspect modcrm-api-1 --format '{{json .NetworkSettings.Networks}}'
+ip -br addr
+````
+
+Example for the current VPS (replace interface, subnet and destination IP for other deployments):
+
+```bash
+ufw allow in on br-fd7401dbc329 \\
+  from 172.18.0.0/16 \\
+  to 187.7.203.205 port 443 proto tcp \\
+  comment 'ModCRM internal HTTPS'
+````
+
+This persistent UFW rule does not grant public HTTPS access. Keep external Telegram CIDRs in PortKeeper. Update the UFW rule if the Docker bridge, subnet or destination changes. Verify from the API network namespace:
+
+```bash
+docker run --rm --network container:modcrm-api-1 \\
+  curlimages/curl:latest -v --connect-timeout 5 --max-time 15 \\
+  -H 'Content-Type: application/json' -d '{}' \\
+  'https://datapasa.ddns.net/telegram/prod'
+````
+
+Expected: HTTP 401 without the webhook secret (not a TCP timeout). Then run the CRM Telegram diagnostics to verify authenticated access. Do not add internal Docker CIDRs to PortKeeper's external client allowlist.
