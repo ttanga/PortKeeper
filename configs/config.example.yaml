@@ -10,6 +10,7 @@ rate_limit_requests: 10
 rate_limit_window: "1m"
 
 # Local web administration. The admin UI is served by the same binary.
+# The HTTPS setting applies to both the API and admin listeners.
 # HTTP is the default; enable HTTPS only after installing a readable certificate/key.
 admin:
   enabled: true
