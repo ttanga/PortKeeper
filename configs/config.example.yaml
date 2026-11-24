@@ -32,3 +32,8 @@ access:
     allowed_networks:
       - "160.79.104.0/21"
       - "153.61.208.0/20"
+
+# Empty list preserves legacy protection on all interfaces.
+# Configure only after verifying host firewall rules on other interfaces.
+firewall:
+  protected_interfaces: [] # e.g. ["eth0"]

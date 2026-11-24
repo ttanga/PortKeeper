@@ -468,3 +468,7 @@ cd ../..
 go test ./...
 go build -o portkeeper ./cmd/portkeeper
 ```
+
+### Protected interfaces
+
+Set `firewall.protected_interfaces: ["eth0"]` (or use the admin Settings page) to restrict PortKeeper policy to the named ingress interfaces. An empty list preserves legacy behavior. Other interfaces fall through to the host firewall. Existing PORTKEEPER rules are flushed and rebuilt with interface matches for IPv4 and IPv6; the INPUT jump remains a dispatcher. Verify host firewall policy before enabling this option. Interface names must exist on the host.

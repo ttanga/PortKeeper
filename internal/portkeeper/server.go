@@ -14,6 +14,7 @@ import (
 type Server struct {
 	guidPorts map[string]uint16
 	rules []AccessRule
+	interfaces []string
 	ttl       time.Duration
 	firewall  Firewall
 	store     StateStore
@@ -49,6 +50,7 @@ func NewServer(cfg Config, ttl time.Duration, fw Firewall, store StateStore, ent
 	return &Server{
 		guidPorts: guidPorts,
 		rules: append([]AccessRule(nil), cfg.Access...),
+		interfaces: append([]string(nil), cfg.Firewall.ProtectedInterfaces...),
 		ttl:       ttl,
 		firewall:  fw,
 		store:     store,
@@ -100,7 +102,7 @@ func (s *Server) ApplyConfig(cfg Config, ttl time.Duration) error {
 		}
 	}
 	restoreOldFirewall := func() {
-		_ = s.firewall.EnsureRules(oldRules)
+		_ = s.firewall.EnsureRulesOnInterfaces(oldRules, s.interfaces)
 		for _, port := range union {
 			_ = s.firewall.FlushPort(port)
 		}
@@ -113,7 +115,7 @@ func (s *Server) ApplyConfig(cfg Config, ttl time.Duration) error {
 		_ = s.store.Save(oldEntries)
 	}
 
-	if err := s.firewall.EnsureRules(cfg.Access); err != nil {
+	if err := s.firewall.EnsureRulesOnInterfaces(cfg.Access, cfg.Firewall.ProtectedInterfaces); err != nil {
 		restoreOldFirewall()
 		return fmt.Errorf("rebuild firewall chains: %w", err)
 	}
@@ -148,6 +150,7 @@ func (s *Server) ApplyConfig(cfg Config, ttl time.Duration) error {
 
 	s.guidPorts = newGUIDPorts
 	s.rules = append([]AccessRule(nil), cfg.Access...)
+	s.interfaces = append([]string(nil), cfg.Firewall.ProtectedInterfaces...)
 	s.ttl = ttl
 	s.limiter = NewRateLimiter(cfg.RateLimitRequests, rateWindow)
 	s.entries = nextEntries

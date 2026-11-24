@@ -14,6 +14,7 @@ function remainingTime(expiresAt: string, now: number) {
 }
 
 type Config = {
+  firewall?: { protected_interfaces?: string[] };
   listen_addr: string;
   public_base_url: string;
   default_ttl: string;
@@ -254,6 +255,7 @@ export default function App() {
           <div className="form-grid">
             <label>API Listen Address<input value={config.listen_addr} disabled /></label>
             <label className="wide">Public API URL<input value={config.public_base_url || ""} placeholder="https://vpn.example.com:8787" onChange={(e) => setConfig({ ...config, public_base_url: e.target.value })} /><small className="muted">Публичный адрес API с протоколом и портом, без завершающего слеша. Используется для создания ссылок вида URL/GUID.</small></label>
+            <label className="wide">Защищаемые сетевые интерфейсы<input value={(config.firewall?.protected_interfaces ?? []).join(",")} placeholder="eth0" onChange={e => setConfig({ ...config, firewall: { protected_interfaces: e.target.value === "" ? [] : e.target.value.split(",") } })} /><small className="muted">Имена интерфейсов через запятую без пробелов. Пустое поле — прежняя защита всех интерфейсов. Остальные интерфейсы контролирует системный firewall.</small></label>
             <label>Default TTL<input value={config.default_ttl} onChange={(e) => setConfig({ ...config, default_ttl: e.target.value })} /></label>
             <label>Rate limit requests<input type="number" min="1" value={config.rate_limit_requests} onChange={(e) => setConfig({ ...config, rate_limit_requests: Number(e.target.value) })} /></label>
             <label>Rate limit window<input value={config.rate_limit_window} onChange={(e) => setConfig({ ...config, rate_limit_window: e.target.value })} /></label>

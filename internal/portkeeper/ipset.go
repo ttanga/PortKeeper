@@ -31,12 +31,16 @@ func setName(port uint16, ip net.IP) string {
 
 // Ensure retains the original temporary-only firewall behavior for legacy callers.
 func (f Firewall) Ensure(ports []uint16) error {
-	return f.ensure(ports, nil)
+	return f.ensure(ports, nil, nil)
 }
 
 // EnsureRules installs permanent CIDR allowances ahead of temporary ipset
 // allowances and the final DROP. Multiple GUID rules for one port are merged.
 func (f Firewall) EnsureRules(rules []AccessRule) error {
+	return f.EnsureRulesOnInterfaces(rules, nil)
+}
+
+func (f Firewall) EnsureRulesOnInterfaces(rules []AccessRule, interfaces []string) error {
 	ports := make([]uint16, 0, len(rules))
 	seenPorts := make(map[uint16]bool)
 	permanent := make(map[uint16][]string)
@@ -54,10 +58,10 @@ func (f Firewall) EnsureRules(rules []AccessRule) error {
 			}
 		}
 	}
-	return f.ensure(ports, permanent)
+	return f.ensure(ports, permanent, interfaces)
 }
 
-func (f Firewall) ensure(ports []uint16, permanent map[uint16][]string) error {
+func (f Firewall) ensure(ports []uint16, permanent map[uint16][]string, interfaces []string) error {
 	for _, port := range ports {
 		for _, family := range []string{"inet", "inet6"} {
 			name := fmt.Sprintf("pk_%d_%s", port, map[string]string{"inet": "v4", "inet6": "v6"}[family])
@@ -89,6 +93,15 @@ func (f Firewall) ensure(ports []uint16, permanent map[uint16][]string) error {
 		}
 	}
 
+	// Scope every policy rule, leaving the existing INPUT jump as a dispatcher.
+	// Unmatched interfaces return to INPUT and continue through the host firewall.
+	if len(interfaces) == 0 { interfaces = []string{""} }
+	for _, iface := range interfaces {
+		appendRule := func(command string, args ...string) error {
+			prefix := []string{"-A", "PORTKEEPER"}
+			if iface != "" { prefix = append(prefix, "-i", iface) }
+			return f.run(command, append(prefix, args...)...)
+		}
 	for _, port := range ports {
 		p := strconv.Itoa(int(port))
 		for _, cidr := range permanent[port] {
@@ -96,21 +109,22 @@ func (f Firewall) ensure(ports []uint16, permanent map[uint16][]string) error {
 			if err != nil { return fmt.Errorf("invalid permanent CIDR %q for port %d: %w", cidr, port, err) }
 			command := "iptables"
 			if ip.To4() == nil { command = "ip6tables" }
-			if err := f.run(command, "-A", "PORTKEEPER", "-p", "tcp", "--dport", p,
+			if err := appendRule(command, "-p", "tcp", "--dport", p,
 				"-s", cidr, "-j", "ACCEPT"); err != nil { return err }
 		}
-		if err := f.run("iptables", "-A", "PORTKEEPER", "-p", "tcp", "--dport", p, "-m", "set", "--match-set", fmt.Sprintf("pk_%d_v4", port), "src", "-j", "ACCEPT"); err != nil {
+		if err := appendRule("iptables", "-p", "tcp", "--dport", p, "-m", "set", "--match-set", fmt.Sprintf("pk_%d_v4", port), "src", "-j", "ACCEPT"); err != nil {
 			return err
 		}
-		if err := f.run("iptables", "-A", "PORTKEEPER", "-p", "tcp", "--dport", p, "-j", "DROP"); err != nil {
+		if err := appendRule("iptables", "-p", "tcp", "--dport", p, "-j", "DROP"); err != nil {
 			return err
 		}
-		if err := f.run("ip6tables", "-A", "PORTKEEPER", "-p", "tcp", "--dport", p, "-m", "set", "--match-set", fmt.Sprintf("pk_%d_v6", port), "src", "-j", "ACCEPT"); err != nil {
+		if err := appendRule("ip6tables", "-p", "tcp", "--dport", p, "-m", "set", "--match-set", fmt.Sprintf("pk_%d_v6", port), "src", "-j", "ACCEPT"); err != nil {
 			return err
 		}
-		if err := f.run("ip6tables", "-A", "PORTKEEPER", "-p", "tcp", "--dport", p, "-j", "DROP"); err != nil {
+		if err := appendRule("ip6tables", "-p", "tcp", "--dport", p, "-j", "DROP"); err != nil {
 			return err
 		}
+	}
 	}
 
 	if err := f.ensureJump("iptables"); err != nil {

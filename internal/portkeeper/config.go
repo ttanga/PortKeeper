@@ -11,7 +11,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type FirewallConfig struct {
+	ProtectedInterfaces []string `yaml:"protected_interfaces,omitempty" json:"protected_interfaces,omitempty"`
+}
+
 type Config struct {
+	Firewall FirewallConfig `yaml:"firewall,omitempty" json:"firewall,omitempty"`
 	ListenAddr        string       `yaml:"listen_addr" json:"listen_addr"`
 	PublicBaseURL     string       `yaml:"public_base_url" json:"public_base_url"`
 	DefaultTTL        string       `yaml:"default_ttl" json:"default_ttl"`
@@ -55,6 +60,17 @@ func ParseConfig(data []byte) (Config, time.Duration, error) {
 }
 
 func ValidateConfig(cfg Config) (Config, time.Duration, error) {
+	seenInterfaces := map[string]bool{}
+	for _, name := range cfg.Firewall.ProtectedInterfaces {
+		if len(name) == 0 || len(name) > 15 || strings.ContainsAny(name, " \t\r\n+!/:") || name == "lo" {
+			return Config{}, 0, fmt.Errorf("invalid protected interface %q", name)
+		}
+		if _, err := net.InterfaceByName(name); err != nil {
+			return Config{}, 0, fmt.Errorf("protected interface %q: %w", name, err)
+		}
+		if seenInterfaces[name] { return Config{}, 0, fmt.Errorf("duplicate protected interface %q", name) }
+		seenInterfaces[name] = true
+	}
 	if cfg.ListenAddr == "" {
 		cfg.ListenAddr = ":8787"
 	}
